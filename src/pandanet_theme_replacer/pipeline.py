@@ -4,21 +4,39 @@ from pathlib import Path
 import re
 from tempfile import TemporaryDirectory
 
-from pandanet_theme_replacer.assets import build_theme_from_asset_files, merge_theme_assets
+from pandanet_theme_replacer.assets import (
+    build_theme_from_asset_files,
+    merge_theme_assets,
+    normalize_theme_assets,
+)
 from pandanet_theme_replacer.errors import ConfigurationError, ThemeImportError
 from pandanet_theme_replacer.importers.sabaki import load_sabaki_theme
 from pandanet_theme_replacer.models import (
+    AssetRole,
     BackgroundMode,
     EXPECTED_THEME_ROLES,
     ImportedTheme,
     PlannedReplacement,
     ReplacementPlan,
+    StoneTransform,
 )
 from pandanet_theme_replacer.packaging.asar import extract_asar, pack_asar
-from pandanet_theme_replacer.targets.pandanet import PANDANET_SITE_CSS_PATH, PANDANET_THEME_TARGETS
+from pandanet_theme_replacer.targets.pandanet import (
+    PANDANET_CSS_REF_REPLACEMENTS,
+    PANDANET_GOPANDA_JS_PATH,
+    PANDANET_JS_REF_REPLACEMENTS,
+    PANDANET_SITE_CSS_PATH,
+    css_ref_for_asset,
+    js_ref_for_asset,
+    target_path_for_asset,
+)
 from pandanet_theme_replacer.theme_sources import stage_theme_source
 
 GOBAN_BLOCK_PATTERN = re.compile(r"(?P<prefix>\.goban\s*\{)(?P<body>.*?)(?P<suffix>\n\})", re.DOTALL)
+CSS_BLOCK_TEMPLATE = r"(?P<prefix>{selector}\s*\{{)(?P<body>.*?)(?P<suffix>\n\s*\}})"
+STONE_DRAW_PATTERN = re.compile(
+    r"a\.drawImage\(b,f\*e,\(d-c-1\)\*e,e,e\)"
+)
 
 
 def inspect_theme(theme_path: Path, theme_format: str = "auto") -> ImportedTheme:
@@ -36,7 +54,7 @@ def build_replacement_plan(
 
     for role in EXPECTED_THEME_ROLES:
         source_asset = theme.first_asset_for_role(role)
-        target_path = PANDANET_THEME_TARGETS.get(role)
+        target_path = target_path_for_asset(source_asset) if source_asset is not None else None
 
         if source_asset is None:
             operations.append(
@@ -46,18 +64,6 @@ def build_replacement_plan(
                     target_relative_path=target_path,
                     status="missing-source",
                     reason="No matching asset was detected in the imported theme.",
-                )
-            )
-            continue
-
-        if target_path is None:
-            operations.append(
-                PlannedReplacement(
-                    role=role,
-                    source_asset=source_asset,
-                    target_relative_path=None,
-                    status="missing-target",
-                    reason="Pandanet target mapping has not been configured yet.",
                 )
             )
             continue
@@ -74,6 +80,7 @@ def build_replacement_plan(
 
     if background_mode is not None:
         post_actions.append(f"Patch {PANDANET_SITE_CSS_PATH} to set board background mode to '{background_mode.value}'.")
+    post_actions.append(f"Patch {PANDANET_SITE_CSS_PATH} and {PANDANET_GOPANDA_JS_PATH} to point at custom board and stone assets.")
 
     return ReplacementPlan(theme=theme, operations=tuple(operations), post_actions=tuple(post_actions))
 
@@ -120,6 +127,7 @@ def replace_theme(
         extracted_dir = temp_root / "app"
         extract_asar(asar_path, extracted_dir)
 
+        asset_refs = build_asset_reference_map(plan.theme)
         for operation in plan.operations:
             assert operation.source_asset is not None
             assert operation.target_relative_path is not None
@@ -128,8 +136,12 @@ def replace_theme(
             destination.parent.mkdir(parents=True, exist_ok=True)
             destination.write_bytes(operation.source_asset.data)
 
+        patch_css_asset_references(extracted_dir / PANDANET_SITE_CSS_PATH, asset_refs)
+        patch_js_asset_references(extracted_dir / PANDANET_GOPANDA_JS_PATH, asset_refs)
+        patch_css_stone_transforms(extracted_dir / PANDANET_SITE_CSS_PATH, plan.theme.stone_transforms)
+        patch_js_stone_transforms(extracted_dir / PANDANET_GOPANDA_JS_PATH, plan.theme.stone_transforms)
         if background_mode is not None:
-            patch_background_mode(extracted_dir / PANDANET_SITE_CSS_PATH, background_mode)
+            patch_background_mode(extracted_dir / PANDANET_SITE_CSS_PATH, background_mode, asset_refs[0])
 
         output_path.parent.mkdir(parents=True, exist_ok=True)
         pack_asar(extracted_dir, output_path)
@@ -158,14 +170,15 @@ def load_input_theme(
             raise ThemeImportError(
                 "No input theme or assets were provided. Supply a theme path or explicit asset arguments."
             )
-        return explicit_assets
+        return normalize_theme_assets(explicit_assets)
 
     with stage_theme_source(theme_path) as prepared:
         theme = _load_theme(prepared, theme_format)
 
-    if explicit_assets is None:
-        return theme
-    return merge_theme_assets(theme, explicit_assets)
+    if explicit_assets is not None:
+        theme = merge_theme_assets(theme, explicit_assets)
+
+    return normalize_theme_assets(theme)
 
 
 def _load_theme(prepared, theme_format: str) -> ImportedTheme:
@@ -175,7 +188,7 @@ def _load_theme(prepared, theme_format: str) -> ImportedTheme:
     return load_sabaki_theme(prepared)
 
 
-def patch_background_mode(site_css_path: Path, mode: BackgroundMode) -> None:
+def patch_background_mode(site_css_path: Path, mode: BackgroundMode, board_css_ref: str) -> None:
     if not site_css_path.is_file():
         raise ConfigurationError(f"Expected CSS file was not found: {site_css_path}")
 
@@ -193,11 +206,11 @@ def patch_background_mode(site_css_path: Path, mode: BackgroundMode) -> None:
     replacement_lines: list[str] = []
     replaced_background = False
     for line in filtered_lines:
-        if 'background: url("../img/wood-board.jpg")' in line:
+        if "background: url(" in line:
             if mode == BackgroundMode.REPEAT:
-                replacement_lines.append('  background: url("../img/wood-board.jpg") repeat;')
+                replacement_lines.append(f'  background: url("{board_css_ref}") repeat;')
             else:
-                replacement_lines.append('  background: url("../img/wood-board.jpg") no-repeat;')
+                replacement_lines.append(f'  background: url("{board_css_ref}") no-repeat;')
                 replacement_lines.append("  background-size: 100% 100%;")
                 replacement_lines.append("  background-position: center;")
             replaced_background = True
@@ -205,7 +218,164 @@ def patch_background_mode(site_css_path: Path, mode: BackgroundMode) -> None:
             replacement_lines.append(line)
 
     if not replaced_background:
-        raise ConfigurationError(f"Could not find wood-board background declaration in {site_css_path}")
+        raise ConfigurationError(f"Could not find board background declaration in {site_css_path}")
 
     new_block = f"{match.group('prefix')}{''.join(f'{line}\n' for line in replacement_lines)}{match.group('suffix')}"
     site_css_path.write_text(css_text[: match.start()] + new_block + css_text[match.end() :], encoding="utf-8")
+
+
+def build_asset_reference_map(theme: ImportedTheme) -> tuple[str, dict[AssetRole, str], dict[AssetRole, str]]:
+    css_refs: dict[AssetRole, str] = {}
+    js_refs: dict[AssetRole, str] = {}
+    board_css_ref = ""
+
+    for role in EXPECTED_THEME_ROLES:
+        asset = theme.first_asset_for_role(role)
+        if asset is None:
+            continue
+
+        css_ref = css_ref_for_asset(asset)
+        js_ref = js_ref_for_asset(asset)
+        css_refs[role] = css_ref
+        js_refs[role] = js_ref
+        if role == AssetRole.BOARD:
+            board_css_ref = css_ref
+
+    if not board_css_ref:
+        raise ConfigurationError("Replacement plan did not include a board asset.")
+
+    return board_css_ref, css_refs, js_refs
+
+
+def patch_css_asset_references(
+    site_css_path: Path,
+    asset_refs: tuple[str, dict[AssetRole, str], dict[AssetRole, str]],
+) -> None:
+    if not site_css_path.is_file():
+        raise ConfigurationError(f"Expected CSS file was not found: {site_css_path}")
+
+    board_css_ref, css_refs, _ = asset_refs
+    css_text = site_css_path.read_text(encoding="utf-8")
+
+    for stock_ref, role in PANDANET_CSS_REF_REPLACEMENTS.items():
+        replacement = board_css_ref if role == AssetRole.BOARD else css_refs[role]
+        css_text = css_text.replace(stock_ref, replacement)
+
+    site_css_path.write_text(css_text, encoding="utf-8")
+
+
+def patch_css_stone_transforms(site_css_path: Path, stone_transforms: dict[AssetRole, StoneTransform]) -> None:
+    if not stone_transforms:
+        return
+    if not site_css_path.is_file():
+        raise ConfigurationError(f"Expected CSS file was not found: {site_css_path}")
+
+    css_text = site_css_path.read_text(encoding="utf-8")
+    selector_map = {
+        AssetRole.STONE_BLACK: (
+            ".goban-page .lid .lid-captures .capture.white",
+            ".goban-page .info-panel .info-panel-wrapper .name-rank .mark.black",
+        ),
+        AssetRole.STONE_WHITE: (
+            ".goban-page .lid .lid-captures .capture.black",
+            ".goban-page .info-panel .info-panel-wrapper .name-rank .mark.white",
+        ),
+    }
+    for role, selectors in selector_map.items():
+        transform = stone_transforms.get(role)
+        if transform is None:
+            continue
+        for selector in selectors:
+            css_text = _patch_css_block(
+                css_text,
+                selector,
+                {
+                    "background-size": f"{transform.width} {transform.height}",
+                    "background-position": f"{transform.left} {transform.top}",
+                },
+            )
+
+    site_css_path.write_text(css_text, encoding="utf-8")
+
+
+def patch_js_stone_transforms(
+    gopanda_js_path: Path,
+    stone_transforms: dict[AssetRole, StoneTransform],
+) -> None:
+    if not stone_transforms:
+        return
+    if not gopanda_js_path.is_file():
+        raise ConfigurationError(f"Expected JS file was not found: {gopanda_js_path}")
+
+    js_text = gopanda_js_path.read_text(encoding="utf-8")
+    replacement = _build_js_stone_draw_replacement(stone_transforms)
+    patched, count = STONE_DRAW_PATTERN.subn(replacement, js_text, count=1)
+    if count != 1:
+        raise ConfigurationError(f"Could not find stock stone drawImage call in {gopanda_js_path}")
+
+    gopanda_js_path.write_text(patched, encoding="utf-8")
+
+
+def patch_js_asset_references(
+    gopanda_js_path: Path,
+    asset_refs: tuple[str, dict[AssetRole, str], dict[AssetRole, str]],
+) -> None:
+    if not gopanda_js_path.is_file():
+        raise ConfigurationError(f"Expected JS file was not found: {gopanda_js_path}")
+
+    _, _, js_refs = asset_refs
+    js_text = gopanda_js_path.read_text(encoding="utf-8")
+
+    for stock_ref, role in PANDANET_JS_REF_REPLACEMENTS.items():
+        js_text = js_text.replace(stock_ref, js_refs[role])
+
+    gopanda_js_path.write_text(js_text, encoding="utf-8")
+
+
+def _patch_css_block(css_text: str, selector: str, declarations: dict[str, str]) -> str:
+    pattern = re.compile(CSS_BLOCK_TEMPLATE.format(selector=re.escape(selector)), re.DOTALL)
+    match = pattern.search(css_text)
+    if match is None:
+        raise ConfigurationError(f"Could not find CSS block for selector '{selector}'")
+
+    body = match.group("body")
+    lines = body.splitlines()
+    filtered = [
+        line
+        for line in lines
+        if not any(f"{name}:" in line for name in declarations)
+    ]
+    filtered.extend(f"  {name}: {value};" for name, value in declarations.items())
+    new_block = f"{match.group('prefix')}{''.join(f'{line}\n' for line in filtered)}{match.group('suffix')}"
+    return css_text[: match.start()] + new_block + css_text[match.end() :]
+
+
+def _build_js_stone_draw_replacement(stone_transforms: dict[AssetRole, StoneTransform]) -> str:
+    parts: list[str] = []
+    black = stone_transforms.get(AssetRole.STONE_BLACK)
+    white = stone_transforms.get(AssetRole.STONE_WHITE)
+    if black is not None:
+        parts.append(f"b===e0?{_js_transform_object(black)}")
+    if white is not None:
+        parts.append(f"b===f0?{_js_transform_object(white)}")
+    transform_expr = ":".join(parts) + ":null" if parts else "null"
+    return (
+        f"var h={transform_expr},k=f*e,n=(d-c-1)*e;"
+        "null!=h?a.drawImage(b,k+h.left*e/100,n+h.top*e/100,h.width*e/100,h.height*e/100):"
+        "a.drawImage(b,k,n,e,e)"
+    )
+
+
+def _js_transform_object(transform: StoneTransform) -> str:
+    return (
+        "{"
+        f'left:{_percent_number(transform.left)},'
+        f'top:{_percent_number(transform.top)},'
+        f'width:{_percent_number(transform.width)},'
+        f'height:{_percent_number(transform.height)}'
+        "}"
+    )
+
+
+def _percent_number(value: str) -> str:
+    return format(float(value.removesuffix("%")), "g")

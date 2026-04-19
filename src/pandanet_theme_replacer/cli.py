@@ -7,7 +7,7 @@ import sys
 from pandanet_theme_replacer.errors import PandanetThemeReplacerError
 from pandanet_theme_replacer.models import BackgroundMode
 from pandanet_theme_replacer.pipeline import inspect_theme, replace_theme
-from pandanet_theme_replacer.targets.pandanet import DEFAULT_ASAR_PATH
+from pandanet_theme_replacer.targets.pandanet import resolve_source_asar_path
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -38,13 +38,12 @@ def build_parser() -> argparse.ArgumentParser:
     replace_parser.add_argument(
         "--asar",
         type=Path,
-        default=DEFAULT_ASAR_PATH,
-        help="Source Pandanet app.asar path.",
+        help="Source Pandanet ASAR path. Defaults to original-app.asar when present, otherwise app.asar.",
     )
     replace_parser.add_argument(
         "--output",
         type=Path,
-        default=Path("build/pandanet-themed.asar"),
+        default=Path("build/app.asar"),
         help="Output path for the repacked app.asar.",
     )
     replace_parser.add_argument(
@@ -54,7 +53,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--board-background",
         dest="board_background",
         type=Path,
-        help="Override the board texture used inside the goban. Converted to Pandanet's board format.",
+        help="Override the board texture used inside the goban. The source file is copied into the patched ASAR as-is.",
     )
     replace_parser.add_argument(
         "--board-background-mode",
@@ -65,12 +64,12 @@ def build_parser() -> argparse.ArgumentParser:
     replace_parser.add_argument(
         "--black-stone",
         type=Path,
-        help="Override the black stone asset. Converted to Pandanet's stone format.",
+        help="Override the black stone asset. The source file is copied into the patched ASAR as-is.",
     )
     replace_parser.add_argument(
         "--white-stone",
         type=Path,
-        help="Override the white stone asset. Converted to Pandanet's stone format.",
+        help="Override the white stone asset. The source file is copied into the patched ASAR as-is.",
     )
     replace_parser.add_argument(
         "--dry-run",
@@ -97,9 +96,10 @@ def main(argv: list[str] | None = None) -> int:
                 if args.board_background_mode is not None
                 else None
             )
+            asar_path = resolve_source_asar_path(args.asar)
             plan = replace_theme(
                 args.theme,
-                args.asar,
+                asar_path,
                 args.output,
                 background_path=args.board_background,
                 black_stone_path=args.black_stone,
@@ -108,7 +108,7 @@ def main(argv: list[str] | None = None) -> int:
                 dry_run=args.dry_run,
                 theme_format=args.format,
             )
-            _print_replacement_plan(plan, args.asar, args.output, args.dry_run)
+            _print_replacement_plan(plan, asar_path, args.output, args.dry_run)
             return 0
 
         parser.error("Unknown command")

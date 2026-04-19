@@ -2,11 +2,15 @@
 
 `pandanet-theme-replacer` is a single-purpose utility for swapping the board and stone theme inside the Pandanet desktop client by repacking its Electron `app.asar`.
 
-The long-term target is the installed Pandanet bundle at:
+The installed Pandanet bundle lives at:
 
 `/Applications/GoPanda2.app/Contents/Resources/app.asar`
 
-The project is built with Python and `uv`. Python handles asset loading, optional Sabaki theme import, planning, format conversion, CSS patching, and file replacement orchestration. ASAR extraction and packing are routed through Electron's maintained CLI via `asar` or `npm exec --package=@electron/asar asar --`.
+For repeatable theming, keep the clean upstream archive alongside it as:
+
+`/Applications/GoPanda2.app/Contents/Resources/original-app.asar`
+
+The project is built with Python and `uv`. Python handles asset loading, optional Sabaki theme import, planning, CSS and JS patching, and file replacement orchestration. ASAR extraction and packing are routed through Electron's maintained CLI via `asar` or `npm exec --package=@electron/asar asar --`.
 
 ## Scope
 
@@ -19,7 +23,7 @@ The project is built with Python and `uv`. Python handles asset loading, optiona
   - `board`
   - `stone-black`
   - `stone-white`
-- Map those roles onto Pandanet's actual asset files inside `app.asar`.
+- Copy those assets into the patched archive and redirect Pandanet's CSS/JS references to them.
 - Patch the client CSS so the goban board texture can either repeat or scale.
 - Extract, replace, and repack a new `.asar`.
 
@@ -32,17 +36,16 @@ This initialization pass sets up:
 - Sabaki theme inspection for directories and `.zip` packages.
 - A replacement planner and dry-run workflow.
 - An ASAR adapter interface.
-- A concrete Pandanet target map for the primary board and stone assets.
+- A concrete Pandanet patch map for the primary board and stone references.
 - CSS patching for goban board texture mode.
+- Narrow Sabaki stone transform import for `.shudan-stone-image.shudan-sign_1` and `.shudan-stone-image.shudan-sign_-1`.
 - Project documentation and the Pandanet asset inventory.
 
 What is still intentionally unfinished:
 
-- Image normalization is intentionally minimal for now:
-  - background is converted to JPEG if needed
-  - stones are converted to PNG if needed
-- Size normalization is not implemented yet.
-- Secondary Pandanet stone assets such as shadowed and variation images are documented but not generated from the imported theme yet.
+- Secondary Pandanet stone assets such as shadowed and variation images still use the stock client files.
+- Size normalization is not implemented.
+- Grid color and other canvas-drawn styling are still hardcoded in `gopanda.js`.
 
 ## CLI
 
@@ -56,10 +59,10 @@ Build a dry-run plan from direct asset files:
 
 ```bash
 uv run pandanet-theme-replacer replace \
-  --board-background /path/to/board.png \
+  --board-background /path/to/board.svg \
   --board-background-mode scale \
-  --black-stone /path/to/black.png \
-  --white-stone /path/to/white.png \
+  --black-stone /path/to/black.svg \
+  --white-stone /path/to/white.svg \
   --dry-run
 ```
 
@@ -67,7 +70,7 @@ Use a Sabaki theme, but override just one asset:
 
 ```bash
 uv run pandanet-theme-replacer replace /path/to/theme \
-  --board-background /path/to/custom-board.jpg \
+  --board-background /path/to/custom-board.svg \
   --board-background-mode repeat \
   --dry-run
 ```
@@ -76,13 +79,37 @@ Repack to a new output file:
 
 ```bash
 uv run pandanet-theme-replacer replace \
-  --board-background /path/to/board.png \
+  --board-background /path/to/board.svg \
   --board-background-mode scale \
-  --black-stone /path/to/black.webp \
-  --white-stone /path/to/white.jpg \
-  --asar /Applications/GoPanda2.app/Contents/Resources/app.asar \
-  --output ./build/pandanet-themed.asar
+  --black-stone /path/to/black.svg \
+  --white-stone /path/to/white.svg \
+  --output ./build/app.asar
 ```
+
+When `--asar` is omitted, the tool looks for `/Applications/GoPanda2.app/Contents/Resources/original-app.asar` first and falls back to `app.asar`.
+
+## Install Into App
+
+By default, the tool writes the patched archive to `build/app.asar`, which is ready for Finder replacement.
+
+Before using the tool for the first time, preserve the original archive in Finder:
+
+1. Quit GoPanda.
+2. In Finder, open `/Applications`.
+3. Right-click `GoPanda2.app` and choose `Show Package Contents`.
+4. Open `Contents/Resources`.
+5. Rename `app.asar` to `original-app.asar`.
+6. Keep `original-app.asar` in that folder.
+
+After generating `build/app.asar`, install the themed archive in Finder:
+
+1. Open `/Applications/GoPanda2.app/Contents/Resources`.
+2. Copy `build/app.asar` into that folder.
+3. Replace the existing `app.asar`.
+
+This keeps the clean base archive available, so the tool always rebuilds from the original app instead of stacking one theme patch on top of another.
+
+Using Finder is the simplest path on macOS because terminal writes into app bundles under `/Applications` can be blocked by system privacy controls even when normal file permissions look correct.
 
 ## Board Background Modes
 
@@ -94,13 +121,14 @@ To avoid ambiguity:
 - `--board-background` refers to the wood texture inside `.goban`.
 - The area around the board is styled separately by `.goban-page`, which uses CSS radial gradients rather than an image.
 
-## Current Conversion Rules
+## Asset Handling
 
-- The board asset is written to `app/img/wood-board.jpg`, so non-JPEG input is converted to JPEG.
-- The black and white stone assets are written to `app/img/50/stone-black.png` and `app/img/50/stone-white.png`, so non-PNG input is converted to PNG.
-- No resizing or cropping is performed yet.
-
-Image conversion currently uses macOS `sips`, which matches the target environment for this utility.
+- The primary board and stone assets are copied into `app/img/custom/` with their original file extensions preserved.
+- `app/css/site.css` is patched to point `.goban`, `.capture.*`, and `.mark.*` at those copied assets.
+- `app/js/gopanda.js` is patched so the main canvas stones load from the copied black and white stone files.
+- When a Sabaki theme defines per-stone `width`, `height`, `top`, and `left` on `.shudan-stone-image.shudan-sign_1` or `.shudan-stone-image.shudan-sign_-1`, the tool generates wrapper SVGs that apply those transforms without rasterizing the source images.
+- `--board-background-mode` only changes how `.goban` renders the board asset: `repeat` or scaled-to-fit.
+- SVG is the preferred format when available because Electron renders it natively; no rasterization is done for the primary assets.
 
 ## Repository Layout
 

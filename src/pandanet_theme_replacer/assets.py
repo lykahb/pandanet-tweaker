@@ -1,12 +1,9 @@
 from __future__ import annotations
 
 from pathlib import Path
-from tempfile import TemporaryDirectory
-import subprocess
 
-from pandanet_theme_replacer.errors import ExternalToolError, ThemeImportError
-from pandanet_theme_replacer.models import AssetRole, ImportedTheme, ThemeAsset
-from pandanet_theme_replacer.targets.pandanet import PANDANET_TARGET_FORMATS
+from pandanet_theme_replacer.errors import ThemeImportError
+from pandanet_theme_replacer.models import ImportedTheme, ThemeAsset, AssetRole
 
 
 def build_theme_from_asset_files(
@@ -30,7 +27,13 @@ def build_theme_from_asset_files(
             "--black-stone, and --white-stone inputs."
         )
 
-    source_root = _common_source_root([asset_path for asset_path in (background_path, black_stone_path, white_stone_path) if asset_path is not None])
+    source_root = _common_source_root(
+        [
+            asset_path
+            for asset_path in (background_path, black_stone_path, white_stone_path)
+            if asset_path is not None
+        ]
+    )
 
     return ImportedTheme(
         source=source_root,
@@ -39,6 +42,7 @@ def build_theme_from_asset_files(
         name="custom-assets",
         version=None,
         assets=tuple(assets),
+        stone_transforms={},
         metadata={},
     )
 
@@ -66,7 +70,26 @@ def merge_theme_assets(base_theme: ImportedTheme, overrides: ImportedTheme) -> I
         name=base_theme.name,
         version=base_theme.version,
         assets=tuple(ordered_assets),
+        stone_transforms=dict(base_theme.stone_transforms),
         warnings=base_theme.warnings,
+        metadata=metadata,
+    )
+
+
+def normalize_theme_assets(theme: ImportedTheme) -> ImportedTheme:
+    normalized_assets = tuple(_normalize_theme_asset(asset) for asset in theme.assets)
+    metadata = dict(theme.metadata)
+    metadata["normalized_for_targets"] = "true"
+
+    return ImportedTheme(
+        source=theme.source,
+        root=theme.root,
+        format_name=theme.format_name,
+        name=theme.name,
+        version=theme.version,
+        assets=normalized_assets,
+        stone_transforms=dict(theme.stone_transforms),
+        warnings=theme.warnings,
         metadata=metadata,
     )
 
@@ -76,46 +99,41 @@ def _load_asset(role: AssetRole, source_path: Path) -> ThemeAsset:
     if not source_path.is_file():
         raise ThemeImportError(f"Asset file does not exist: {source_path}")
 
-    target_format = PANDANET_TARGET_FORMATS[role]
-    data = convert_image_for_role(source_path, role)
-
     return ThemeAsset(
         role=role,
-        filename=f"{source_path.stem}.{_suffix_for_format(target_format)}",
+        filename=_normalized_filename(role, source_path.name),
         source_ref=str(source_path),
-        data=data,
-        notes=f"converted-to-{target_format}",
+        data=source_path.read_bytes(),
+        notes="original-bytes",
     )
 
 
-def convert_image_for_role(source_path: Path, role: AssetRole) -> bytes:
-    target_format = PANDANET_TARGET_FORMATS[role]
-    if source_path.suffix.lower() in _accepted_suffixes(target_format):
-        return source_path.read_bytes()
-
-    with TemporaryDirectory(prefix="pandanet-convert-") as temp_dir:
-        temp_root = Path(temp_dir)
-        output_path = temp_root / f"converted.{_suffix_for_format(target_format)}"
-        command = ["sips", "-s", "format", target_format, str(source_path), "--out", str(output_path)]
-        result = subprocess.run(command, capture_output=True, text=True, check=False)
-        if result.returncode != 0:
-            detail = result.stderr.strip() or result.stdout.strip() or "no output"
-            raise ExternalToolError(f"Image conversion failed: {' '.join(command)}\n{detail}")
-        return output_path.read_bytes()
+def _normalize_theme_asset(asset: ThemeAsset) -> ThemeAsset:
+    normalized_filename = _normalized_filename(asset.role, asset.filename)
+    return ThemeAsset(
+        role=asset.role,
+        filename=normalized_filename,
+        source_ref=asset.source_ref,
+        data=asset.data,
+        notes=asset.notes or "original-bytes",
+    )
 
 
-def _accepted_suffixes(target_format: str) -> tuple[str, ...]:
-    if target_format == "jpeg":
-        return (".jpg", ".jpeg")
-    if target_format == "png":
-        return (".png",)
-    return (f".{target_format}",)
+def _normalized_filename(role: AssetRole, original_name: str) -> str:
+    suffix = Path(original_name).suffix.lower()
+    if not suffix:
+        suffix = ".bin"
 
+    if role == AssetRole.BOARD:
+        base = "board"
+    elif role == AssetRole.STONE_BLACK:
+        base = "stone-black"
+    elif role == AssetRole.STONE_WHITE:
+        base = "stone-white"
+    else:
+        base = Path(original_name).stem
 
-def _suffix_for_format(target_format: str) -> str:
-    if target_format == "jpeg":
-        return "jpg"
-    return target_format
+    return f"{base}{suffix}"
 
 
 def _common_source_root(paths: list[Path]) -> Path:

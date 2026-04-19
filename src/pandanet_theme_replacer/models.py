@@ -38,6 +38,14 @@ class ThemeAsset:
 
 
 @dataclass(frozen=True)
+class StoneTransform:
+    width: str
+    height: str
+    top: str
+    left: str
+
+
+@dataclass(frozen=True)
 class ImportedTheme:
     source: Path
     root: Path
@@ -45,14 +53,19 @@ class ImportedTheme:
     name: str
     version: str | None
     assets: tuple[ThemeAsset, ...]
+    stone_transforms: dict[AssetRole, StoneTransform] = field(default_factory=dict)
     warnings: tuple[str, ...] = ()
     metadata: dict[str, str] = field(default_factory=dict)
 
     def first_asset_for_role(self, role: AssetRole) -> ThemeAsset | None:
+        preferred: ThemeAsset | None = None
         for asset in self.assets:
             if asset.role == role:
-                return asset
-        return None
+                if asset.notes == "css-role-match":
+                    return asset
+                if preferred is None:
+                    preferred = asset
+        return preferred
 
 
 @dataclass(frozen=True)
