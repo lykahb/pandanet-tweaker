@@ -1,0 +1,21 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "pandanet-theme-replacer"
+version = "0.1.0"
+description = "Repack the Pandanet Go client app.asar with a custom board theme."
+readme = "README.md"
+requires-python = ">=3.12"
+authors = [{ name = "OpenAI Codex" }]
+dependencies = []
+
+[project.scripts]
+pandanet-theme-replacer = "pandanet_theme_replacer.cli:main"
+
+[tool.uv]
+package = true
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/pandanet_theme_replacer"]
