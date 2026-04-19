@@ -63,7 +63,7 @@ class ImportedTheme:
             if asset.role == role:
                 if asset.notes == "css-role-match":
                     return asset
-                if preferred is None:
+                if preferred is None or _asset_priority(role, asset) < _asset_priority(role, preferred):
                     preferred = asset
         return preferred
 
@@ -90,3 +90,16 @@ class ReplacementPlan:
             if operation.status != "ready":
                 unresolved.append(operation.role)
         return tuple(unresolved)
+
+
+def _asset_priority(role: AssetRole, asset: ThemeAsset) -> tuple[int, str]:
+    name = asset.source_ref.lower()
+
+    if role == AssetRole.BOARD:
+        if any(token in name for token in ("board", "goban")):
+            return (0, name)
+        if any(token in name for token in ("background", "/bg", "_bg", "-bg", " bg")):
+            return (2, name)
+        return (1, name)
+
+    return (0, name)

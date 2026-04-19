@@ -72,6 +72,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Override the white stone asset. The source file is copied into the patched ASAR as-is.",
     )
     replace_parser.add_argument(
+        "--grid-rgba",
+        type=str,
+        help="Tint the goban grid canvas with a hex RGBA color, for example #c58a3cff.",
+    )
+    replace_parser.add_argument(
         "--dry-run",
         action="store_true",
         help="Print the replacement plan without extracting or repacking the ASAR.",
@@ -105,6 +110,7 @@ def main(argv: list[str] | None = None) -> int:
                 black_stone_path=args.black_stone,
                 white_stone_path=args.white_stone,
                 background_mode=background_mode,
+                grid_rgba=args.grid_rgba,
                 dry_run=args.dry_run,
                 theme_format=args.format,
             )

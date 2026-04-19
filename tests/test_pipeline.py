@@ -12,12 +12,14 @@ from pandanet_theme_replacer.pipeline import (
     load_input_theme,
     patch_background_mode,
     patch_css_asset_references,
+    patch_grid_color_override,
     patch_css_stone_transforms,
     patch_js_asset_references,
     patch_js_stone_transforms,
     replace_theme,
 )
 from pandanet_theme_replacer.targets import pandanet
+from pandanet_theme_replacer.targets.pandanet import grid_rgba_to_css_filter
 
 PNG_1X1 = b64decode(
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+cG1EAAAAASUVORK5CYII="
@@ -78,6 +80,32 @@ class ReplacementPlanTests(unittest.TestCase):
             ),
         )
         self.assertEqual(str(plan.operations[0].target_relative_path), "app/img/custom/board.jpg")
+
+    def test_replace_dry_run_reports_grid_override_post_action(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            board = root / "board.jpg"
+            black = root / "black.png"
+            white = root / "white.png"
+            board.write_bytes(JPEG_1X1)
+            black.write_bytes(PNG_1X1)
+            white.write_bytes(PNG_1X1)
+
+            plan = replace_theme(
+                None,
+                root / "app.asar",
+                root / "out.asar",
+                background_path=board,
+                black_stone_path=black,
+                white_stone_path=white,
+                grid_rgba="#336699cc",
+                dry_run=True,
+            )
+
+        self.assertIn(
+            "Patch app/css/site.css to tint .goban > .grid-canvas with #336699cc.",
+            plan.post_actions,
+        )
 
     def test_load_input_theme_merges_explicit_assets_over_theme(self) -> None:
         with TemporaryDirectory() as temp_dir:
@@ -145,6 +173,30 @@ class ReplacementPlanTests(unittest.TestCase):
 
         self.assertEqual(theme.first_asset_for_role(AssetRole.STONE_BLACK).source_ref, "glass_black2.png")
         self.assertEqual(theme.first_asset_for_role(AssetRole.STONE_WHITE).source_ref, "glass_white3.png")
+
+    def test_load_input_theme_prefers_board_named_asset_over_background_asset(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            (root / "package.json").write_text('{"name": "board-priority-theme"}', encoding="utf-8")
+            (root / "theme.css").write_text(
+                """
+                .board { background-image: url("images/Board.png"); }
+                .background { background-image: url("images/Background.png"); }
+                .black { background-image: url("black.png"); }
+                .white { background-image: url("white.png"); }
+                """,
+                encoding="utf-8",
+            )
+            images = root / "images"
+            images.mkdir()
+            (images / "Board.png").write_bytes(PNG_1X1)
+            (images / "Background.png").write_bytes(PNG_1X1)
+            (root / "black.png").write_bytes(PNG_1X1)
+            (root / "white.png").write_bytes(PNG_1X1)
+
+            theme = load_input_theme(root)
+
+        self.assertEqual(theme.first_asset_for_role(AssetRole.BOARD).source_ref, "images/Board.png")
 
     def test_patch_background_mode_updates_goban_css_block(self) -> None:
         with TemporaryDirectory() as temp_dir:
@@ -297,6 +349,19 @@ class ReplacementPlanTests(unittest.TestCase):
         self.assertIn('b===e0?{left:-16,top:-14,width:127,height:127}', js_text)
         self.assertIn('b===f0?{left:-10,top:-10,width:200,height:200}', js_text)
         self.assertIn('a.drawImage(b,k+h.left*e/100,n+h.top*e/100,h.width*e/100,h.height*e/100)', js_text)
+
+    def test_patch_grid_color_override_appends_goban_scoped_rule(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            css_path = Path(temp_dir) / "site.css"
+            css_path.write_text(".goban-page .goban canvas.grid-canvas {\n  z-index: 1;\n}\n", encoding="utf-8")
+
+            patch_grid_color_override(css_path, grid_rgba_to_css_filter("#336699cc"))
+            css_text = css_path.read_text(encoding="utf-8")
+
+        self.assertIn("/* pandanet-theme-replacer grid override */", css_text)
+        self.assertIn(".goban > .grid-canvas {", css_text)
+        self.assertIn("filter: ", css_text)
+        self.assertIn("opacity: 0.8;", css_text)
 
 
 if __name__ == "__main__":

@@ -50,10 +50,14 @@ There are two different visual backgrounds in the client:
 The board grid is not defined by an image asset.
 
 - Grid lines are drawn on `grid-canvas` in `app/js/gopanda.js`.
+- The `grid-canvas` class is reused outside the goban, including grid/list views elsewhere in the client.
+- CSS experiments that target the board grid should scope to the goban canvas, for example `.goban > .grid-canvas`, instead of targeting `.grid-canvas` globally.
 - The grid line color is hardcoded as `black` in the canvas rendering code.
 - Coordinate labels are also canvas-drawn and use `rgba(0,0,0,0.5)`.
+- Because the line color is baked into rendered canvas pixels, a CSS-only recolor has to use a filter on the already-drawn canvas instead of changing the original stroke color.
 
 That means changing grid color is a code patching task, not an asset replacement task.
+The current utility supports a CSS-only compromise through `--grid-rgba`: it appends a goban-scoped filter and opacity rule for `.goban > .grid-canvas`.
 
 ## Related Assets
 
@@ -92,6 +96,7 @@ For stone scaling and offset, the tool currently supports a narrow subset of Sab
 - properties: `width`, `height`, `top`, `left`
 
 When those are present with percentage values, the tool generates wrapper SVGs so Pandanet uses the same placement without modifying the source stone image.
+When those are present with percentage values, the tool patches Pandanet's direct stone rendering and CSS background sizing/positioning to preserve the same placement without rasterizing the source stone image.
 
 ## Open Questions
 

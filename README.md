@@ -25,6 +25,7 @@ The project is built with Python and `uv`. Python handles asset loading, optiona
   - `stone-white`
 - Copy those assets into the patched archive and redirect Pandanet's CSS/JS references to them.
 - Patch the client CSS so the goban board texture can either repeat or scale.
+- Optionally tint the goban grid canvas with a CSS filter derived from a target RGBA color.
 - Extract, replace, and repack a new `.asar`.
 
 ## Current State
@@ -38,6 +39,7 @@ This initialization pass sets up:
 - An ASAR adapter interface.
 - A concrete Pandanet patch map for the primary board and stone references.
 - CSS patching for goban board texture mode.
+- Grid color override via a goban-scoped CSS filter.
 - Narrow Sabaki stone transform import for `.shudan-stone-image.shudan-sign_1` and `.shudan-stone-image.shudan-sign_-1`.
 - Project documentation and the Pandanet asset inventory.
 
@@ -63,6 +65,7 @@ uv run pandanet-theme-replacer replace \
   --board-background-mode scale \
   --black-stone /path/to/black.svg \
   --white-stone /path/to/white.svg \
+  --grid-rgba '#c58a3ccc' \
   --dry-run
 ```
 
@@ -126,9 +129,18 @@ To avoid ambiguity:
 - The primary board and stone assets are copied into `app/img/custom/` with their original file extensions preserved.
 - `app/css/site.css` is patched to point `.goban`, `.capture.*`, and `.mark.*` at those copied assets.
 - `app/js/gopanda.js` is patched so the main canvas stones load from the copied black and white stone files.
-- When a Sabaki theme defines per-stone `width`, `height`, `top`, and `left` on `.shudan-stone-image.shudan-sign_1` or `.shudan-stone-image.shudan-sign_-1`, the tool generates wrapper SVGs that apply those transforms without rasterizing the source images.
+- When a Sabaki theme defines per-stone `width`, `height`, `top`, and `left` on `.shudan-stone-image.shudan-sign_1` or `.shudan-stone-image.shudan-sign_-1`, the tool patches Pandanet's stone draw rectangle and related CSS background sizing/positioning instead of rasterizing the source images.
 - `--board-background-mode` only changes how `.goban` renders the board asset: `repeat` or scaled-to-fit.
+- `--grid-rgba` appends a goban-scoped CSS override for `.goban > .grid-canvas`.
 - SVG is the preferred format when available because Electron renders it natively; no rasterization is done for the primary assets.
+
+## Grid Override
+
+`--grid-rgba` takes a hex color in `#RRGGBB`, `#RRGGBBAA`, `#RGB`, or `#RGBA` form and derives a CSS `filter` plus `opacity` override for the board grid canvas.
+
+This is roundabout, but it is necessary because Pandanet draws the grid lines directly onto a transparent canvas in JS with a hardcoded black stroke. CSS cannot change the canvas `strokeStyle` after the grid has already been drawn, so the only CSS-only option is to tint the rendered canvas as a whole.
+
+The override is scoped to `.goban > .grid-canvas` because the `grid-canvas` class is also used elsewhere in the client for non-goban views.
 
 ## Repository Layout
 

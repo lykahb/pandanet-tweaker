@@ -56,6 +56,49 @@ class SabakiImportTests(unittest.TestCase):
         self.assertEqual({asset.role.value for asset in theme.assets}, {"board", "stone-black", "stone-white"})
         self.assertEqual({asset.filename for asset in theme.assets}, {"board.svg", "black.svg", "white.svg"})
 
+    def test_detects_light_and_dark_named_stones(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            (root / "package.json").write_text('{"name": "light-dark-theme"}', encoding="utf-8")
+            (root / "theme.css").write_text(
+                """
+                .board { background-image: url("board.png"); }
+                .dark { background-image: url("stone_dark.png"); }
+                .light { background-image: url("stone_light.png"); }
+                """,
+                encoding="utf-8",
+            )
+            (root / "board.png").write_bytes(b"board")
+            (root / "stone_dark.png").write_bytes(b"dark")
+            (root / "stone_light.png").write_bytes(b"light")
+
+            theme = inspect_theme(root)
+
+        self.assertEqual(theme.first_asset_for_role(AssetRole.STONE_BLACK).filename, "stone_dark.png")
+        self.assertEqual(theme.first_asset_for_role(AssetRole.STONE_WHITE).filename, "stone_light.png")
+
+    def test_prefers_board_named_asset_over_generic_background_asset(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            (root / "package.json").write_text('{"name": "board-priority-theme"}', encoding="utf-8")
+            (root / "theme.css").write_text(
+                """
+                .board { background-image: url("Board.png"); }
+                .background { background-image: url("Background.png"); }
+                .black { background-image: url("black.png"); }
+                .white { background-image: url("white.png"); }
+                """,
+                encoding="utf-8",
+            )
+            (root / "Board.png").write_bytes(b"board")
+            (root / "Background.png").write_bytes(b"background")
+            (root / "black.png").write_bytes(b"black")
+            (root / "white.png").write_bytes(b"white")
+
+            theme = inspect_theme(root)
+
+        self.assertEqual(theme.first_asset_for_role(AssetRole.BOARD).filename, "Board.png")
+
     def test_extracts_stone_transforms_and_role_specific_assets_from_css(self) -> None:
         with TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

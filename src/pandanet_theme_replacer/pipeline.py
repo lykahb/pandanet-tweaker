@@ -22,11 +22,13 @@ from pandanet_theme_replacer.models import (
 )
 from pandanet_theme_replacer.packaging.asar import extract_asar, pack_asar
 from pandanet_theme_replacer.targets.pandanet import (
+    PANDANET_GOBAN_GRID_SELECTOR,
     PANDANET_CSS_REF_REPLACEMENTS,
     PANDANET_GOPANDA_JS_PATH,
     PANDANET_JS_REF_REPLACEMENTS,
     PANDANET_SITE_CSS_PATH,
     css_ref_for_asset,
+    grid_rgba_to_css_filter,
     js_ref_for_asset,
     target_path_for_asset,
 )
@@ -36,6 +38,10 @@ GOBAN_BLOCK_PATTERN = re.compile(r"(?P<prefix>\.goban\s*\{)(?P<body>.*?)(?P<suff
 CSS_BLOCK_TEMPLATE = r"(?P<prefix>{selector}\s*\{{)(?P<body>.*?)(?P<suffix>\n\s*\}})"
 STONE_DRAW_PATTERN = re.compile(
     r"a\.drawImage\(b,f\*e,\(d-c-1\)\*e,e,e\)"
+)
+GRID_OVERRIDE_BLOCK_PATTERN = re.compile(
+    r"\n/\* pandanet-theme-replacer grid override \*/\n\.goban > \.grid-canvas \{\n.*?\n\}\n?",
+    re.DOTALL,
 )
 
 
@@ -48,6 +54,7 @@ def build_replacement_plan(
     theme: ImportedTheme,
     *,
     background_mode: BackgroundMode | None = None,
+    grid_rgba: str | None = None,
 ) -> ReplacementPlan:
     operations: list[PlannedReplacement] = []
     post_actions: list[str] = []
@@ -81,6 +88,8 @@ def build_replacement_plan(
     if background_mode is not None:
         post_actions.append(f"Patch {PANDANET_SITE_CSS_PATH} to set board background mode to '{background_mode.value}'.")
     post_actions.append(f"Patch {PANDANET_SITE_CSS_PATH} and {PANDANET_GOPANDA_JS_PATH} to point at custom board and stone assets.")
+    if grid_rgba is not None:
+        post_actions.append(f"Patch {PANDANET_SITE_CSS_PATH} to tint {PANDANET_GOBAN_GRID_SELECTOR} with {grid_rgba}.")
 
     return ReplacementPlan(theme=theme, operations=tuple(operations), post_actions=tuple(post_actions))
 
@@ -94,6 +103,7 @@ def replace_theme(
     black_stone_path: Path | None = None,
     white_stone_path: Path | None = None,
     background_mode: BackgroundMode | None = None,
+    grid_rgba: str | None = None,
     dry_run: bool = False,
     theme_format: str = "auto",
 ) -> ReplacementPlan:
@@ -104,7 +114,14 @@ def replace_theme(
         black_stone_path=black_stone_path,
         white_stone_path=white_stone_path,
     )
-    plan = build_replacement_plan(theme, background_mode=background_mode)
+    grid_filter = None
+    if grid_rgba is not None:
+        try:
+            grid_filter = grid_rgba_to_css_filter(grid_rgba)
+        except ValueError as exc:
+            raise ConfigurationError(f"Invalid --grid-rgba value: {exc}") from exc
+
+    plan = build_replacement_plan(theme, background_mode=background_mode, grid_rgba=grid_rgba)
 
     if dry_run:
         return plan
@@ -140,6 +157,8 @@ def replace_theme(
         patch_js_asset_references(extracted_dir / PANDANET_GOPANDA_JS_PATH, asset_refs)
         patch_css_stone_transforms(extracted_dir / PANDANET_SITE_CSS_PATH, plan.theme.stone_transforms)
         patch_js_stone_transforms(extracted_dir / PANDANET_GOPANDA_JS_PATH, plan.theme.stone_transforms)
+        if grid_filter is not None:
+            patch_grid_color_override(extracted_dir / PANDANET_SITE_CSS_PATH, grid_filter)
         if background_mode is not None:
             patch_background_mode(extracted_dir / PANDANET_SITE_CSS_PATH, background_mode, asset_refs[0])
 
@@ -330,6 +349,22 @@ def patch_js_asset_references(
         js_text = js_text.replace(stock_ref, js_refs[role])
 
     gopanda_js_path.write_text(js_text, encoding="utf-8")
+
+
+def patch_grid_color_override(site_css_path: Path, grid_filter) -> None:
+    if not site_css_path.is_file():
+        raise ConfigurationError(f"Expected CSS file was not found: {site_css_path}")
+
+    css_text = site_css_path.read_text(encoding="utf-8")
+    css_text = GRID_OVERRIDE_BLOCK_PATTERN.sub("\n", css_text)
+    override_block = (
+        "\n/* pandanet-theme-replacer grid override */\n"
+        f"{PANDANET_GOBAN_GRID_SELECTOR} {{\n"
+        f"  filter: {grid_filter.filter_css};\n"
+        f"  opacity: {grid_filter.opacity_css};\n"
+        "}\n"
+    )
+    site_css_path.write_text(css_text.rstrip() + override_block, encoding="utf-8")
 
 
 def _patch_css_block(css_text: str, selector: str, declarations: dict[str, str]) -> str:

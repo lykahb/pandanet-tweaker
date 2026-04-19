@@ -48,7 +48,8 @@ Responsibilities:
 - Extract `app.asar`.
 - Copy custom board and stone assets into `app/img/custom/`.
 - Patch stock CSS and JS references to point at those copied assets.
-- Generate wrapper SVGs for stones when Sabaki themes specify scale and offset in CSS.
+- Patch direct stone drawing and related CSS sizing/positioning when Sabaki themes specify stone scale and offset in CSS.
+- Optionally append a goban-scoped CSS filter rule to tint the grid canvas.
 - Patch the CSS goban board texture mode between `repeat` and `scale`.
 - Repack to a new `.asar`.
 - Keep the implementation behind a small adapter so the tool can use `asar` or `npm exec --package=@electron/asar asar --`.

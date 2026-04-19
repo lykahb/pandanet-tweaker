@@ -193,11 +193,15 @@ def _build_asset(
 def _classify_role(relative_path: Path) -> AssetRole:
     name = relative_path.as_posix().lower()
 
-    if "black" in name and "white" not in name:
+    if any(token in name for token in ("black", "dark")) and not any(
+        token in name for token in ("white", "light")
+    ):
         return AssetRole.STONE_BLACK
-    if "white" in name:
+    if any(token in name for token in ("white", "light")):
         return AssetRole.STONE_WHITE
-    if any(token in name for token in ("board", "wood", "grain", "kaya", "bamboo", "bg", "background", "goban")):
+    if any(token in name for token in ("board", "goban", "wood", "grain", "kaya", "bamboo")):
+        return AssetRole.BOARD
+    if any(token in name for token in ("background", "bg")):
         return AssetRole.BOARD
 
     return AssetRole.UNKNOWN
