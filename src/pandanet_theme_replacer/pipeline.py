@@ -25,8 +25,11 @@ from pandanet_theme_replacer.targets.pandanet import (
     PANDANET_GOBAN_GRID_SELECTOR,
     PANDANET_CSS_REF_REPLACEMENTS,
     PANDANET_GOPANDA_JS_PATH,
+    PANDANET_INDEX_HTML_PATH,
     PANDANET_JS_REF_REPLACEMENTS,
     PANDANET_SITE_CSS_PATH,
+    PANDANET_THEME_RUNTIME_JS_PATH,
+    PANDANET_THEME_RUNTIME_SCRIPT_SRC,
     css_ref_for_asset,
     grid_rgba_to_css_filter,
     js_ref_for_asset,
@@ -36,12 +39,15 @@ from pandanet_theme_replacer.theme_sources import stage_theme_source
 
 GOBAN_BLOCK_PATTERN = re.compile(r"(?P<prefix>\.goban\s*\{)(?P<body>.*?)(?P<suffix>\n\})", re.DOTALL)
 CSS_BLOCK_TEMPLATE = r"(?P<prefix>{selector}\s*\{{)(?P<body>.*?)(?P<suffix>\n\s*\}})"
-STONE_DRAW_PATTERN = re.compile(
-    r"a\.drawImage\(b,f\*e,\(d-c-1\)\*e,e,e\)"
-)
 GRID_OVERRIDE_BLOCK_PATTERN = re.compile(
     r"\n/\* pandanet-theme-replacer grid override \*/\n\.goban > \.grid-canvas \{\n.*?\n\}\n?",
     re.DOTALL,
+)
+INDEX_HTML_RUNTIME_SCRIPT_PATTERN = re.compile(
+    rf'<script src="{re.escape(PANDANET_THEME_RUNTIME_SCRIPT_SRC)}" type="text/javascript"></script>'
+)
+INDEX_HTML_GOPANDA_SCRIPT_PATTERN = re.compile(
+    r'(?P<tag><script src="js/gopanda\.js" type="text/javascript"></script>)'
 )
 
 
@@ -88,6 +94,10 @@ def build_replacement_plan(
     if background_mode is not None:
         post_actions.append(f"Patch {PANDANET_SITE_CSS_PATH} to set board background mode to '{background_mode.value}'.")
     post_actions.append(f"Patch {PANDANET_SITE_CSS_PATH} and {PANDANET_GOPANDA_JS_PATH} to point at custom board and stone assets.")
+    if theme.stone_transforms:
+        post_actions.append(
+            f"Inject {PANDANET_THEME_RUNTIME_JS_PATH} and patch {PANDANET_INDEX_HTML_PATH} to apply stone transforms at runtime."
+        )
     if grid_rgba is not None:
         post_actions.append(f"Patch {PANDANET_SITE_CSS_PATH} to tint {PANDANET_GOBAN_GRID_SELECTOR} with {grid_rgba}.")
 
@@ -156,7 +166,13 @@ def replace_theme(
         patch_css_asset_references(extracted_dir / PANDANET_SITE_CSS_PATH, asset_refs)
         patch_js_asset_references(extracted_dir / PANDANET_GOPANDA_JS_PATH, asset_refs)
         patch_css_stone_transforms(extracted_dir / PANDANET_SITE_CSS_PATH, plan.theme.stone_transforms)
-        patch_js_stone_transforms(extracted_dir / PANDANET_GOPANDA_JS_PATH, plan.theme.stone_transforms)
+        if plan.theme.stone_transforms:
+            write_runtime_stone_transform_script(
+                extracted_dir / PANDANET_THEME_RUNTIME_JS_PATH,
+                plan.theme.stone_transforms,
+                asset_refs[2],
+            )
+            patch_index_html_for_runtime_script(extracted_dir / PANDANET_INDEX_HTML_PATH)
         if grid_filter is not None:
             patch_grid_color_override(extracted_dir / PANDANET_SITE_CSS_PATH, grid_filter)
         if background_mode is not None:
@@ -317,22 +333,35 @@ def patch_css_stone_transforms(site_css_path: Path, stone_transforms: dict[Asset
     site_css_path.write_text(css_text, encoding="utf-8")
 
 
-def patch_js_stone_transforms(
-    gopanda_js_path: Path,
+def patch_index_html_for_runtime_script(index_html_path: Path) -> None:
+    if not index_html_path.is_file():
+        raise ConfigurationError(f"Expected HTML file was not found: {index_html_path}")
+
+    html_text = index_html_path.read_text(encoding="utf-8")
+    if INDEX_HTML_RUNTIME_SCRIPT_PATTERN.search(html_text):
+        return
+
+    patched, count = INDEX_HTML_GOPANDA_SCRIPT_PATTERN.subn(
+        rf'\g<tag>{chr(10)}    <script src="{PANDANET_THEME_RUNTIME_SCRIPT_SRC}" type="text/javascript"></script>',
+        html_text,
+        count=1,
+    )
+    if count != 1:
+        raise ConfigurationError(f"Could not find gopanda.js script tag in {index_html_path}")
+
+    index_html_path.write_text(patched, encoding="utf-8")
+
+
+def write_runtime_stone_transform_script(
+    runtime_js_path: Path,
     stone_transforms: dict[AssetRole, StoneTransform],
+    js_refs: dict[AssetRole, str],
 ) -> None:
     if not stone_transforms:
         return
-    if not gopanda_js_path.is_file():
-        raise ConfigurationError(f"Expected JS file was not found: {gopanda_js_path}")
 
-    js_text = gopanda_js_path.read_text(encoding="utf-8")
-    replacement = _build_js_stone_draw_replacement(stone_transforms)
-    patched, count = STONE_DRAW_PATTERN.subn(replacement, js_text, count=1)
-    if count != 1:
-        raise ConfigurationError(f"Could not find stock stone drawImage call in {gopanda_js_path}")
-
-    gopanda_js_path.write_text(patched, encoding="utf-8")
+    runtime_js_path.parent.mkdir(parents=True, exist_ok=True)
+    runtime_js_path.write_text(build_runtime_stone_transform_script(stone_transforms, js_refs), encoding="utf-8")
 
 
 def patch_js_asset_references(
@@ -385,31 +414,76 @@ def _patch_css_block(css_text: str, selector: str, declarations: dict[str, str])
     return css_text[: match.start()] + new_block + css_text[match.end() :]
 
 
-def _build_js_stone_draw_replacement(stone_transforms: dict[AssetRole, StoneTransform]) -> str:
-    parts: list[str] = []
-    black = stone_transforms.get(AssetRole.STONE_BLACK)
-    white = stone_transforms.get(AssetRole.STONE_WHITE)
-    if black is not None:
-        parts.append(f"b===e0?{_js_transform_object(black)}")
-    if white is not None:
-        parts.append(f"b===f0?{_js_transform_object(white)}")
-    transform_expr = ":".join(parts) + ":null" if parts else "null"
+def build_runtime_stone_transform_script(
+    stone_transforms: dict[AssetRole, StoneTransform],
+    js_refs: dict[AssetRole, str],
+) -> str:
+    transform_entries: list[str] = []
+    for role in (AssetRole.STONE_BLACK, AssetRole.STONE_WHITE):
+        transform = stone_transforms.get(role)
+        js_ref = js_refs.get(role)
+        if transform is None or js_ref is None:
+            continue
+        transform_entries.append(
+            "    "
+            + _js_string_literal(js_ref)
+            + ": "
+            + _js_runtime_transform_object(transform)
+        )
+
+    transforms_block = ",\n".join(transform_entries)
     return (
-        f"var h={transform_expr},k=f*e,n=(d-c-1)*e;"
-        "null!=h?a.drawImage(b,k+h.left*e/100,n+h.top*e/100,h.width*e/100,h.height*e/100):"
-        "a.drawImage(b,k,n,e,e)"
+        "(function(){\n"
+        "  var proto = CanvasRenderingContext2D && CanvasRenderingContext2D.prototype;\n"
+        "  if (!proto) return;\n"
+        "  if (proto.__pandanetThemeReplacerDrawImagePatched) return;\n"
+        "  var transforms = {\n"
+        f"{transforms_block}\n"
+        "  };\n"
+        "  var originalDrawImage = proto.drawImage;\n"
+        "  function resolveTransform(image) {\n"
+        "    if (!image) return null;\n"
+        "    var src = typeof image.currentSrc === 'string' && image.currentSrc ? image.currentSrc : image.src;\n"
+        "    if (typeof src !== 'string') return null;\n"
+        "    for (var key in transforms) {\n"
+        "      if (Object.prototype.hasOwnProperty.call(transforms, key) && src.indexOf(key) !== -1) return transforms[key];\n"
+        "    }\n"
+        "    return null;\n"
+        "  }\n"
+        "  proto.drawImage = function(image, dx, dy, dw, dh) {\n"
+        "    if (arguments.length === 5) {\n"
+        "      var transform = resolveTransform(image);\n"
+        "      if (transform) {\n"
+        "        return originalDrawImage.call(\n"
+        "          this,\n"
+        "          image,\n"
+        "          dx + (dw * transform.left / 100),\n"
+        "          dy + (dh * transform.top / 100),\n"
+        "          dw * transform.width / 100,\n"
+        "          dh * transform.height / 100\n"
+        "        );\n"
+        "      }\n"
+        "    }\n"
+        "    return originalDrawImage.apply(this, arguments);\n"
+        "  };\n"
+        "  proto.__pandanetThemeReplacerDrawImagePatched = true;\n"
+        "}());\n"
     )
 
 
-def _js_transform_object(transform: StoneTransform) -> str:
+def _js_runtime_transform_object(transform: StoneTransform) -> str:
     return (
-        "{"
-        f'left:{_percent_number(transform.left)},'
-        f'top:{_percent_number(transform.top)},'
-        f'width:{_percent_number(transform.width)},'
-        f'height:{_percent_number(transform.height)}'
+        "{ "
+        f"left: {_percent_number(transform.left)}, "
+        f"top: {_percent_number(transform.top)}, "
+        f"width: {_percent_number(transform.width)}, "
+        f"height: {_percent_number(transform.height)} "
         "}"
     )
+
+
+def _js_string_literal(value: str) -> str:
+    return '"' + value.replace("\\", "\\\\").replace('"', '\\"') + '"'
 
 
 def _percent_number(value: str) -> str:

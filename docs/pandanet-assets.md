@@ -95,8 +95,7 @@ For stone scaling and offset, the tool currently supports a narrow subset of Sab
 - `.shudan-stone-image.shudan-sign_-1`
 - properties: `width`, `height`, `top`, `left`
 
-When those are present with percentage values, the tool generates wrapper SVGs so Pandanet uses the same placement without modifying the source stone image.
-When those are present with percentage values, the tool patches Pandanet's direct stone rendering and CSS background sizing/positioning to preserve the same placement without rasterizing the source stone image.
+When those are present with percentage values, the tool keeps the original stone asset, patches CSS background sizing/positioning for non-canvas stone uses, and injects a small runtime script into the app so Electron adjusts canvas `drawImage()` calls for the custom stone files. This avoids rasterization and avoids fragile surgery inside Pandanet's minified JS bundle.
 
 ## Open Questions
 

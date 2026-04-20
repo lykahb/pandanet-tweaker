@@ -48,7 +48,7 @@ Responsibilities:
 - Extract `app.asar`.
 - Copy custom board and stone assets into `app/img/custom/`.
 - Patch stock CSS and JS references to point at those copied assets.
-- Patch direct stone drawing and related CSS sizing/positioning when Sabaki themes specify stone scale and offset in CSS.
+- Patch related CSS sizing/positioning and inject a small runtime script for canvas stone drawing when Sabaki themes specify stone scale and offset in CSS.
 - Optionally append a goban-scoped CSS filter rule to tint the grid canvas.
 - Patch the CSS goban board texture mode between `repeat` and `scale`.
 - Repack to a new `.asar`.
