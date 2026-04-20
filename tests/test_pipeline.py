@@ -6,6 +6,7 @@ from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
 
+from pandanet_theme_replacer.errors import ConfigurationError
 from pandanet_theme_replacer.models import (
     AssetRole,
     BackgroundMode,
@@ -381,7 +382,7 @@ class ReplacementPlanTests(unittest.TestCase):
             patch_css_asset_references(css_path, refs)
             patch_js_asset_references(js_path, refs)
             patch_css_stone_transforms(css_path, theme.stone_transforms)
-            write_runtime_stone_transform_script(runtime_js_path, theme.stone_transforms, refs.js_refs, {})
+            write_runtime_stone_transform_script(runtime_js_path, theme.stone_transforms, refs.js_refs, {}, 0.0)
             patch_index_html_for_runtime_script(index_html_path)
             css_text = css_path.read_text(encoding="utf-8")
             js_text = js_path.read_text(encoding="utf-8")
@@ -440,6 +441,7 @@ class ReplacementPlanTests(unittest.TestCase):
                 AssetRole.STONE_BLACK: "img/custom/stone-black.svg",
             },
             {},
+            0.0,
         )
 
         self.assertIn('"img/custom/stone-black.svg": { left: -10.92, top: -8.92, width: 116.84, height: 116.84, variants: [] }', script)
@@ -464,6 +466,7 @@ class ReplacementPlanTests(unittest.TestCase):
                     "img/custom/stone-black-variant-2.png",
                 ),
             },
+            0.0,
         )
 
         self.assertIn(
@@ -473,6 +476,82 @@ class ReplacementPlanTests(unittest.TestCase):
         self.assertIn("var variantImages = {};", script)
         self.assertIn("var chosenVariantIndexes = {};", script)
         self.assertIn("Math.floor(Math.random() * config.variants.length)", script)
+
+    def test_build_runtime_stone_transform_script_includes_fuzzy_placement(self) -> None:
+        script = build_runtime_stone_transform_script(
+            {},
+            {
+                AssetRole.STONE_BLACK: "img/custom/stone-black.png",
+                AssetRole.STONE_WHITE: "img/custom/stone-white.png",
+            },
+            {},
+            0.25,
+        )
+
+        self.assertIn("var fuzzyStonePlacement = 0.25;", script)
+        self.assertIn("var chosenShifts = {};", script)
+        self.assertIn("function removeConflictingNeighborShifts(shiftMap, boardKey, cellX, cellY)", script)
+        self.assertIn("chosenShifts[key] = randomInt(8);", script)
+        self.assertIn("var diagonalScale = Math.SQRT1_2 || (1 / Math.sqrt(2));", script)
+        self.assertIn("drawWidth * fuzzyStonePlacement", script)
+
+    def test_replace_dry_run_reports_fuzzy_stone_placement_post_actions(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            board = root / "board.jpg"
+            black = root / "black.png"
+            white = root / "white.png"
+            board.write_bytes(JPEG_1X1)
+            black.write_bytes(PNG_1X1)
+            white.write_bytes(PNG_1X1)
+
+            plan = replace_theme(
+                ReplaceRequest(
+                    input_spec=self._make_input_spec(
+                        board_background_path=board,
+                        black_stone_path=black,
+                        white_stone_path=white,
+                    ),
+                    asar_path=root / "app.asar",
+                    output_path=root / "out.asar",
+                    fuzzy_stone_placement=0.25,
+                    dry_run=True,
+                )
+            )
+
+        self.assertIn(
+            "Inject app/js/pandanet-theme-replacer.js and patch app/index.html to apply stone rendering overrides at runtime.",
+            plan.post_actions,
+        )
+        self.assertIn(
+            "Apply Shudan-style fuzzy stone placement with maximum offset 0.25 stone diameters.",
+            plan.post_actions,
+        )
+
+    def test_replace_rejects_out_of_range_fuzzy_stone_placement(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            board = root / "board.jpg"
+            black = root / "black.png"
+            white = root / "white.png"
+            board.write_bytes(JPEG_1X1)
+            black.write_bytes(PNG_1X1)
+            white.write_bytes(PNG_1X1)
+
+            with self.assertRaisesRegex(ConfigurationError, "must be between 0 and 0.5"):
+                replace_theme(
+                    ReplaceRequest(
+                        input_spec=self._make_input_spec(
+                            board_background_path=board,
+                            black_stone_path=black,
+                            white_stone_path=white,
+                        ),
+                        asar_path=root / "app.asar",
+                        output_path=root / "out.asar",
+                        fuzzy_stone_placement=0.75,
+                        dry_run=True,
+                    )
+                )
 
     def test_load_input_theme_normalizes_random_stone_variants(self) -> None:
         with TemporaryDirectory() as temp_dir:

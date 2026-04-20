@@ -66,6 +66,7 @@ uv run pandanet-theme-replacer replace \
   --black-stone /path/to/black.svg \
   --white-stone /path/to/white.svg \
   --grid-rgba '#c58a3ccc' \
+  --fuzzy-stone-placement 0.08 \
   --dry-run
 ```
 
@@ -148,7 +149,9 @@ To avoid ambiguity:
 - When Sabaki random stone variants are present, the runtime script chooses a stable random variant per board stone draw location so the stones do not flicker on redraw.
 - `--board-background-mode` only changes how `.goban` renders the board asset: `repeat` or scaled-to-fit.
 - `--grid-rgba` appends a goban-scoped CSS override for `.goban > .grid-canvas`.
+- `--fuzzy-stone-placement` adds Shudan-style jitter to board stones. The value is a fraction of the drawn stone diameter, from `0` to `0.5`.
 - SVG is the preferred format when available because Electron renders it natively; no rasterization is done for the primary assets.
+- The fuzzy placement pattern follows Shudan's eight-direction shift map and neighbor-conflict suppression from `Goban.js` and `helper.js`, but the offset magnitude is scaled by the CLI value instead of being fixed in CSS.
 
 ## Grid Override
 

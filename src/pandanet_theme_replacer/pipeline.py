@@ -65,6 +65,7 @@ def build_replacement_plan(
     *,
     background_mode: BackgroundMode | None = None,
     grid_rgba: str | None = None,
+    fuzzy_stone_placement: float = 0.0,
 ) -> ReplacementPlan:
     operations: list[PlannedReplacement] = []
     post_actions: list[str] = []
@@ -98,9 +99,13 @@ def build_replacement_plan(
     if background_mode is not None:
         post_actions.append(f"Patch {PANDANET_SITE_CSS_PATH} to set board background mode to '{background_mode.value}'.")
     post_actions.append(f"Patch {PANDANET_SITE_CSS_PATH} and {PANDANET_GOPANDA_JS_PATH} to point at custom board and stone assets.")
-    if theme.stone_transforms or theme.stone_variants:
+    if theme.stone_transforms or theme.stone_variants or fuzzy_stone_placement > 0:
         post_actions.append(
             f"Inject {PANDANET_THEME_RUNTIME_JS_PATH} and patch {PANDANET_INDEX_HTML_PATH} to apply stone rendering overrides at runtime."
+        )
+    if fuzzy_stone_placement > 0:
+        post_actions.append(
+            f"Apply Shudan-style fuzzy stone placement with maximum offset {fuzzy_stone_placement:g} stone diameters."
         )
     if grid_rgba is not None:
         post_actions.append(f"Patch {PANDANET_SITE_CSS_PATH} to tint {PANDANET_GOBAN_GRID_SELECTOR} with {grid_rgba}.")
@@ -111,6 +116,8 @@ def build_replacement_plan(
 def replace_theme(request: ReplaceRequest) -> ReplacementPlan:
     theme = load_input_theme(request.input_spec)
     grid_filter = None
+    if not 0 <= request.fuzzy_stone_placement <= 0.5:
+        raise ConfigurationError("Invalid --fuzzy-stone-placement value: must be between 0 and 0.5.")
     if request.grid_rgba is not None:
         try:
             grid_filter = grid_rgba_to_css_filter(request.grid_rgba)
@@ -121,6 +128,7 @@ def replace_theme(request: ReplaceRequest) -> ReplacementPlan:
         theme,
         background_mode=request.background_mode,
         grid_rgba=request.grid_rgba,
+        fuzzy_stone_placement=request.fuzzy_stone_placement,
     )
 
     if request.dry_run:
@@ -146,6 +154,7 @@ def replace_theme(request: ReplaceRequest) -> ReplacementPlan:
             plan,
             background_mode=request.background_mode,
             grid_filter=grid_filter,
+            fuzzy_stone_placement=request.fuzzy_stone_placement,
             output_path=output_path,
         )
         return plan
@@ -159,6 +168,7 @@ def replace_theme(request: ReplaceRequest) -> ReplacementPlan:
             plan,
             background_mode=request.background_mode,
             grid_filter=grid_filter,
+            fuzzy_stone_placement=request.fuzzy_stone_placement,
             output_path=output_path,
         )
 
@@ -199,6 +209,7 @@ def _apply_replacement_plan(
     *,
     background_mode: BackgroundMode | None,
     grid_filter,
+    fuzzy_stone_placement: float,
     output_path: Path,
 ) -> None:
     asset_refs = build_asset_reference_map(plan.theme)
@@ -220,12 +231,13 @@ def _apply_replacement_plan(
     patch_js_asset_references(extracted_dir / PANDANET_GOPANDA_JS_PATH, asset_refs)
     patch_css_stone_transforms(extracted_dir / PANDANET_SITE_CSS_PATH, plan.theme.stone_transforms)
     stone_variant_refs = build_stone_variant_reference_map(plan.theme)
-    if plan.theme.stone_transforms or stone_variant_refs:
+    if plan.theme.stone_transforms or stone_variant_refs or fuzzy_stone_placement > 0:
         write_runtime_stone_transform_script(
             extracted_dir / PANDANET_THEME_RUNTIME_JS_PATH,
             plan.theme.stone_transforms,
             asset_refs.js_refs,
             stone_variant_refs,
+            fuzzy_stone_placement,
         )
         patch_index_html_for_runtime_script(extracted_dir / PANDANET_INDEX_HTML_PATH)
     if grid_filter is not None:
@@ -386,13 +398,19 @@ def write_runtime_stone_transform_script(
     stone_transforms: dict[AssetRole, StoneTransform],
     js_refs: dict[AssetRole, str],
     stone_variant_js_refs: dict[AssetRole, tuple[str, ...]],
+    fuzzy_stone_placement: float,
 ) -> None:
-    if not stone_transforms and not stone_variant_js_refs:
+    if not stone_transforms and not stone_variant_js_refs and fuzzy_stone_placement <= 0:
         return
 
     runtime_js_path.parent.mkdir(parents=True, exist_ok=True)
     runtime_js_path.write_text(
-        build_runtime_stone_transform_script(stone_transforms, js_refs, stone_variant_js_refs),
+        build_runtime_stone_transform_script(
+            stone_transforms,
+            js_refs,
+            stone_variant_js_refs,
+            fuzzy_stone_placement,
+        ),
         encoding="utf-8",
     )
 
@@ -450,6 +468,7 @@ def build_runtime_stone_transform_script(
     stone_transforms: dict[AssetRole, StoneTransform],
     js_refs: dict[AssetRole, str],
     stone_variant_js_refs: dict[AssetRole, tuple[str, ...]],
+    fuzzy_stone_placement: float,
 ) -> str:
     config_entries: list[str] = []
     for role in (AssetRole.STONE_BLACK, AssetRole.STONE_WHITE):
@@ -481,7 +500,10 @@ def build_runtime_stone_transform_script(
         "  };\n"
         "  var variantImages = {};\n"
         "  var chosenVariantIndexes = {};\n"
+        "  var chosenShifts = {};\n"
         "  var originalDrawImage = proto.drawImage;\n"
+        f"  var fuzzyStonePlacement = {format(fuzzy_stone_placement, 'g')};\n"
+        "  var diagonalScale = Math.SQRT1_2 || (1 / Math.sqrt(2));\n"
         "  function resolveConfig(image) {\n"
         "    if (!image) return null;\n"
         "    var src = typeof image.currentSrc === 'string' && image.currentSrc ? image.currentSrc : image.src;\n"
@@ -509,19 +531,84 @@ def build_runtime_stone_transform_script(
         "    if (image && image.complete && ((image.naturalWidth || 0) > 0 || (image.width || 0) > 0)) return image;\n"
         "    return null;\n"
         "  }\n"
+        "  function randomInt(maxInclusive) {\n"
+        "    return Math.floor(Math.random() * (maxInclusive + 1));\n"
+        "  }\n"
+        "  function boardKeyFor(ctx, dw, dh) {\n"
+        "    var canvas = ctx && ctx.canvas;\n"
+        "    var canvasWidth = canvas && typeof canvas.width === 'number' ? canvas.width : 0;\n"
+        "    var canvasHeight = canvas && typeof canvas.height === 'number' ? canvas.height : 0;\n"
+        "    return [canvasWidth, canvasHeight, Math.round(dw * 1000), Math.round(dh * 1000)].join('|');\n"
+        "  }\n"
+        "  function cellKeyFor(boardKey, cellX, cellY) {\n"
+        "    return boardKey + '|' + cellX + '|' + cellY;\n"
+        "  }\n"
+        "  function removeConflictingNeighborShifts(shiftMap, boardKey, cellX, cellY) {\n"
+        "    var direction = shiftMap[cellKeyFor(boardKey, cellX, cellY)] || 0;\n"
+        "    var data = [\n"
+        "      [[1, 5, 8], [cellX - 1, cellY], [3, 7, 6]],\n"
+        "      [[2, 5, 6], [cellX, cellY - 1], [4, 7, 8]],\n"
+        "      [[3, 7, 6], [cellX + 1, cellY], [1, 5, 8]],\n"
+        "      [[4, 7, 8], [cellX, cellY + 1], [2, 5, 6]]\n"
+        "    ];\n"
+        "    for (var i = 0; i < data.length; i++) {\n"
+        "      var item = data[i];\n"
+        "      var directions = item[0];\n"
+        "      if (directions.indexOf(direction) === -1) continue;\n"
+        "      var neighbor = item[1];\n"
+        "      var removeShifts = item[2];\n"
+        "      var neighborKey = cellKeyFor(boardKey, neighbor[0], neighbor[1]);\n"
+        "      if (removeShifts.indexOf(shiftMap[neighborKey]) !== -1) {\n"
+        "        shiftMap[neighborKey] = 0;\n"
+        "      }\n"
+        "    }\n"
+        "  }\n"
+        "  function getShiftForStone(ctx, dx, dy, dw, dh) {\n"
+        "    if (!(fuzzyStonePlacement > 0)) return 0;\n"
+        "    var boardKey = boardKeyFor(ctx, dw, dh);\n"
+        "    var cellX = Math.round(dx / dw);\n"
+        "    var cellY = Math.round(dy / dh);\n"
+        "    var key = cellKeyFor(boardKey, cellX, cellY);\n"
+        "    if (!Object.prototype.hasOwnProperty.call(chosenShifts, key)) {\n"
+        "      chosenShifts[key] = randomInt(8);\n"
+        "      removeConflictingNeighborShifts(chosenShifts, boardKey, cellX, cellY);\n"
+        "    }\n"
+        "    return chosenShifts[key] || 0;\n"
+        "  }\n"
+        "  function getFuzzyOffset(shift, drawWidth, drawHeight) {\n"
+        "    if (!(fuzzyStonePlacement > 0) || !shift) return { x: 0, y: 0 };\n"
+        "    var cardinalX = drawWidth * fuzzyStonePlacement;\n"
+        "    var cardinalY = drawHeight * fuzzyStonePlacement;\n"
+        "    var diagonalX = cardinalX * diagonalScale;\n"
+        "    var diagonalY = cardinalY * diagonalScale;\n"
+        "    switch (shift) {\n"
+        "      case 1: return { x: -cardinalX, y: 0 };\n"
+        "      case 2: return { x: 0, y: -cardinalY };\n"
+        "      case 3: return { x: cardinalX, y: 0 };\n"
+        "      case 4: return { x: 0, y: cardinalY };\n"
+        "      case 5: return { x: -diagonalX, y: -diagonalY };\n"
+        "      case 6: return { x: diagonalX, y: -diagonalY };\n"
+        "      case 7: return { x: diagonalX, y: diagonalY };\n"
+        "      case 8: return { x: -diagonalX, y: diagonalY };\n"
+        "      default: return { x: 0, y: 0 };\n"
+        "    }\n"
+        "  }\n"
         "  proto.drawImage = function(image, dx, dy, dw, dh) {\n"
         "    if (arguments.length === 5) {\n"
         "      var resolved = resolveConfig(image);\n"
         "      if (resolved) {\n"
         "        var config = resolved.config;\n"
         "        var imageToDraw = getVariantImage(resolved.key, dx, dy, dw, dh) || image;\n"
+        "        var drawWidth = dw * config.width / 100;\n"
+        "        var drawHeight = dh * config.height / 100;\n"
+        "        var fuzzyOffset = getFuzzyOffset(getShiftForStone(this, dx, dy, dw, dh), drawWidth, drawHeight);\n"
         "        return originalDrawImage.call(\n"
         "          this,\n"
         "          imageToDraw,\n"
-        "          dx + (dw * config.left / 100),\n"
-        "          dy + (dh * config.top / 100),\n"
-        "          dw * config.width / 100,\n"
-        "          dh * config.height / 100\n"
+        "          dx + (dw * config.left / 100) + fuzzyOffset.x,\n"
+        "          dy + (dh * config.top / 100) + fuzzyOffset.y,\n"
+        "          drawWidth,\n"
+        "          drawHeight\n"
         "        );\n"
         "      }\n"
         "    }\n"

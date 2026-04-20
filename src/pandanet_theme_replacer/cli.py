@@ -82,6 +82,15 @@ def build_parser() -> argparse.ArgumentParser:
         help="Tint the goban grid canvas with a hex RGBA color, for example #c58a3cff.",
     )
     replace_parser.add_argument(
+        "--fuzzy-stone-placement",
+        type=float,
+        default=0.0,
+        help=(
+            "Apply Shudan-style fuzzy stone placement. The value is a fraction of the "
+            "drawn stone diameter and must be between 0 and 0.5."
+        ),
+    )
+    replace_parser.add_argument(
         "--dry-run",
         action="store_true",
         help="Print the replacement plan without extracting or repacking the ASAR.",
@@ -120,6 +129,7 @@ def main(argv: list[str] | None = None) -> int:
                 cache_asar_dir=args.cache_asar_dir,
                 background_mode=background_mode,
                 grid_rgba=args.grid_rgba,
+                fuzzy_stone_placement=args.fuzzy_stone_placement,
                 dry_run=args.dry_run,
             )
             plan = replace_theme(request)
