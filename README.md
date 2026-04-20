@@ -67,6 +67,7 @@ uv run pandanet-theme-replacer replace \
   --white-stone /path/to/white.svg \
   --grid-rgba '#c58a3ccc' \
   --fuzzy-stone-placement 0.08 \
+  --disable-default-shadows \
   --dry-run
 ```
 
@@ -150,6 +151,7 @@ To avoid ambiguity:
 - `--board-background-mode` only changes how `.goban` renders the board asset: `repeat` or scaled-to-fit.
 - `--grid-rgba` appends a goban-scoped CSS override for `.goban > .grid-canvas`.
 - `--fuzzy-stone-placement` adds Shudan-style jitter to board stones. The value is a fraction of the drawn stone diameter, from `0` to `0.5`.
+- `--disable-default-shadows` hides `.goban canvas.shadow-canvas`, and it is enabled by default. Use `--no-disable-default-shadows` if you want to keep Pandanet's stock centered shadow layer.
 - SVG is the preferred format when available because Electron renders it natively; no rasterization is done for the primary assets.
 - The fuzzy placement pattern follows Shudan's eight-direction shift map and neighbor-conflict suppression from `Goban.js` and `helper.js`, but the offset magnitude is scaled by the CLI value instead of being fixed in CSS.
 

@@ -23,6 +23,7 @@ from pandanet_theme_replacer.pipeline import (
     patch_background_mode,
     patch_css_asset_references,
     patch_grid_color_override,
+    patch_shadow_canvas_override,
     patch_css_stone_transforms,
     patch_index_html_for_runtime_script,
     patch_js_asset_references,
@@ -108,6 +109,7 @@ class ReplacementPlanTests(unittest.TestCase):
             (
                 "Patch app/css/site.css to set board background mode to 'scale'.",
                 "Patch app/css/site.css and app/js/gopanda.js to point at custom board and stone assets.",
+                "Patch app/css/site.css to hide .goban canvas.shadow-canvas.",
             ),
         )
         self.assertEqual(str(plan.operations[0].target_relative_path), "app/img/custom/board.jpg")
@@ -138,6 +140,35 @@ class ReplacementPlanTests(unittest.TestCase):
 
         self.assertIn(
             "Patch app/css/site.css to tint .goban > .grid-canvas with #336699cc.",
+            plan.post_actions,
+        )
+
+    def test_replace_dry_run_can_leave_default_shadows_enabled(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            board = root / "board.jpg"
+            black = root / "black.png"
+            white = root / "white.png"
+            board.write_bytes(JPEG_1X1)
+            black.write_bytes(PNG_1X1)
+            white.write_bytes(PNG_1X1)
+
+            plan = replace_theme(
+                ReplaceRequest(
+                    input_spec=self._make_input_spec(
+                        board_background_path=board,
+                        black_stone_path=black,
+                        white_stone_path=white,
+                    ),
+                    asar_path=root / "app.asar",
+                    output_path=root / "out.asar",
+                    disable_default_shadows=False,
+                    dry_run=True,
+                )
+            )
+
+        self.assertNotIn(
+            "Patch app/css/site.css to hide .goban canvas.shadow-canvas.",
             plan.post_actions,
         )
 
@@ -258,6 +289,23 @@ class ReplacementPlanTests(unittest.TestCase):
             css_text = css_path.read_text(encoding="utf-8")
             self.assertIn('background: url("../img/custom/board.svg") repeat;', css_text)
             self.assertNotIn("background-size: 100% 100%;", css_text)
+
+    def test_patch_shadow_canvas_override_hides_shadow_canvas_and_is_reversible(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            css_path = Path(temp_dir) / "site.css"
+            css_path.write_text(".goban canvas.shadow-canvas {\n  opacity: 1;\n}\n", encoding="utf-8")
+
+            patch_shadow_canvas_override(css_path, disable_default_shadows=True)
+            patch_shadow_canvas_override(css_path, disable_default_shadows=True)
+            css_text = css_path.read_text(encoding="utf-8")
+            self.assertEqual(css_text.count("/* pandanet-theme-replacer shadow override */"), 1)
+            self.assertIn(".goban canvas.shadow-canvas {", css_text)
+            self.assertIn("display: none;", css_text)
+
+            patch_shadow_canvas_override(css_path, disable_default_shadows=False)
+            reverted_css_text = css_path.read_text(encoding="utf-8")
+            self.assertNotIn("/* pandanet-theme-replacer shadow override */", reverted_css_text)
+            self.assertNotIn("display: none;", reverted_css_text)
 
     def test_css_and_js_refs_are_patched_to_custom_assets(self) -> None:
         with TemporaryDirectory() as temp_dir:

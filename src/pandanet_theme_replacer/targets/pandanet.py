@@ -17,6 +17,7 @@ PANDANET_THEME_RUNTIME_JS_PATH = Path("app/js/pandanet-theme-replacer.js")
 PANDANET_THEME_RUNTIME_SCRIPT_SRC = "js/pandanet-theme-replacer.js"
 PANDANET_CUSTOM_ASSET_DIR = Path("app/img/custom")
 PANDANET_GOBAN_GRID_SELECTOR = ".goban > .grid-canvas"
+PANDANET_GOBAN_SHADOW_SELECTOR = ".goban canvas.shadow-canvas"
 
 PANDANET_THEME_STOCK_REFS: dict[AssetRole, str] = {
     AssetRole.BOARD: "../img/wood-board.jpg",

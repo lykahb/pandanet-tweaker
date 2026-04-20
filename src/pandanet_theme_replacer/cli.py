@@ -91,6 +91,15 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     replace_parser.add_argument(
+        "--disable-default-shadows",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help=(
+            "Hide Pandanet's stock shadow canvas. Enabled by default because the built-in "
+            "shadows often clash with custom themes and fuzzy stone placement."
+        ),
+    )
+    replace_parser.add_argument(
         "--dry-run",
         action="store_true",
         help="Print the replacement plan without extracting or repacking the ASAR.",
@@ -130,6 +139,7 @@ def main(argv: list[str] | None = None) -> int:
                 background_mode=background_mode,
                 grid_rgba=args.grid_rgba,
                 fuzzy_stone_placement=args.fuzzy_stone_placement,
+                disable_default_shadows=args.disable_default_shadows,
                 dry_run=args.dry_run,
             )
             plan = replace_theme(request)

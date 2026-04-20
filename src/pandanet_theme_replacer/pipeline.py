@@ -27,6 +27,7 @@ from pandanet_theme_replacer.models import (
 from pandanet_theme_replacer.packaging.asar import extract_asar, pack_asar
 from pandanet_theme_replacer.targets.pandanet import (
     PANDANET_GOBAN_GRID_SELECTOR,
+    PANDANET_GOBAN_SHADOW_SELECTOR,
     PANDANET_CSS_REF_REPLACEMENTS,
     PANDANET_GOPANDA_JS_PATH,
     PANDANET_INDEX_HTML_PATH,
@@ -45,6 +46,10 @@ GOBAN_BLOCK_PATTERN = re.compile(r"(?P<prefix>\.goban\s*\{)(?P<body>.*?)(?P<suff
 CSS_BLOCK_TEMPLATE = r"(?P<prefix>{selector}\s*\{{)(?P<body>.*?)(?P<suffix>\n\s*\}})"
 GRID_OVERRIDE_BLOCK_PATTERN = re.compile(
     r"\n/\* pandanet-theme-replacer grid override \*/\n\.goban > \.grid-canvas \{\n.*?\n\}\n?",
+    re.DOTALL,
+)
+SHADOW_OVERRIDE_BLOCK_PATTERN = re.compile(
+    r"\n/\* pandanet-theme-replacer shadow override \*/\n\.goban canvas\.shadow-canvas \{\n.*?\n\}\n?",
     re.DOTALL,
 )
 INDEX_HTML_RUNTIME_SCRIPT_PATTERN = re.compile(
@@ -66,6 +71,7 @@ def build_replacement_plan(
     background_mode: BackgroundMode | None = None,
     grid_rgba: str | None = None,
     fuzzy_stone_placement: float = 0.0,
+    disable_default_shadows: bool = True,
 ) -> ReplacementPlan:
     operations: list[PlannedReplacement] = []
     post_actions: list[str] = []
@@ -99,6 +105,10 @@ def build_replacement_plan(
     if background_mode is not None:
         post_actions.append(f"Patch {PANDANET_SITE_CSS_PATH} to set board background mode to '{background_mode.value}'.")
     post_actions.append(f"Patch {PANDANET_SITE_CSS_PATH} and {PANDANET_GOPANDA_JS_PATH} to point at custom board and stone assets.")
+    if disable_default_shadows:
+        post_actions.append(
+            f"Patch {PANDANET_SITE_CSS_PATH} to hide {PANDANET_GOBAN_SHADOW_SELECTOR}."
+        )
     if theme.stone_transforms or theme.stone_variants or fuzzy_stone_placement > 0:
         post_actions.append(
             f"Inject {PANDANET_THEME_RUNTIME_JS_PATH} and patch {PANDANET_INDEX_HTML_PATH} to apply stone rendering overrides at runtime."
@@ -129,6 +139,7 @@ def replace_theme(request: ReplaceRequest) -> ReplacementPlan:
         background_mode=request.background_mode,
         grid_rgba=request.grid_rgba,
         fuzzy_stone_placement=request.fuzzy_stone_placement,
+        disable_default_shadows=request.disable_default_shadows,
     )
 
     if request.dry_run:
@@ -155,6 +166,7 @@ def replace_theme(request: ReplaceRequest) -> ReplacementPlan:
             background_mode=request.background_mode,
             grid_filter=grid_filter,
             fuzzy_stone_placement=request.fuzzy_stone_placement,
+            disable_default_shadows=request.disable_default_shadows,
             output_path=output_path,
         )
         return plan
@@ -169,6 +181,7 @@ def replace_theme(request: ReplaceRequest) -> ReplacementPlan:
             background_mode=request.background_mode,
             grid_filter=grid_filter,
             fuzzy_stone_placement=request.fuzzy_stone_placement,
+            disable_default_shadows=request.disable_default_shadows,
             output_path=output_path,
         )
 
@@ -210,6 +223,7 @@ def _apply_replacement_plan(
     background_mode: BackgroundMode | None,
     grid_filter,
     fuzzy_stone_placement: float,
+    disable_default_shadows: bool,
     output_path: Path,
 ) -> None:
     asset_refs = build_asset_reference_map(plan.theme)
@@ -229,6 +243,10 @@ def _apply_replacement_plan(
 
     patch_css_asset_references(extracted_dir / PANDANET_SITE_CSS_PATH, asset_refs)
     patch_js_asset_references(extracted_dir / PANDANET_GOPANDA_JS_PATH, asset_refs)
+    patch_shadow_canvas_override(
+        extracted_dir / PANDANET_SITE_CSS_PATH,
+        disable_default_shadows=disable_default_shadows,
+    )
     patch_css_stone_transforms(extracted_dir / PANDANET_SITE_CSS_PATH, plan.theme.stone_transforms)
     stone_variant_refs = build_stone_variant_reference_map(plan.theme)
     if plan.theme.stone_transforms or stone_variant_refs or fuzzy_stone_placement > 0:
@@ -444,6 +462,24 @@ def patch_grid_color_override(site_css_path: Path, grid_filter) -> None:
         "}\n"
     )
     site_css_path.write_text(css_text.rstrip() + override_block, encoding="utf-8")
+
+
+def patch_shadow_canvas_override(site_css_path: Path, *, disable_default_shadows: bool) -> None:
+    if not site_css_path.is_file():
+        raise ConfigurationError(f"Expected CSS file was not found: {site_css_path}")
+
+    css_text = site_css_path.read_text(encoding="utf-8")
+    css_text = SHADOW_OVERRIDE_BLOCK_PATTERN.sub("\n", css_text)
+    if disable_default_shadows:
+        override_block = (
+            "\n/* pandanet-theme-replacer shadow override */\n"
+            f"{PANDANET_GOBAN_SHADOW_SELECTOR} {{\n"
+            "  display: none;\n"
+            "}\n"
+        )
+        css_text = css_text.rstrip() + override_block
+
+    site_css_path.write_text(css_text, encoding="utf-8")
 
 
 def _patch_css_block(css_text: str, selector: str, declarations: dict[str, str]) -> str:
