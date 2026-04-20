@@ -98,9 +98,9 @@ def build_replacement_plan(
     if background_mode is not None:
         post_actions.append(f"Patch {PANDANET_SITE_CSS_PATH} to set board background mode to '{background_mode.value}'.")
     post_actions.append(f"Patch {PANDANET_SITE_CSS_PATH} and {PANDANET_GOPANDA_JS_PATH} to point at custom board and stone assets.")
-    if theme.stone_transforms:
+    if theme.stone_transforms or theme.stone_variants:
         post_actions.append(
-            f"Inject {PANDANET_THEME_RUNTIME_JS_PATH} and patch {PANDANET_INDEX_HTML_PATH} to apply stone transforms at runtime."
+            f"Inject {PANDANET_THEME_RUNTIME_JS_PATH} and patch {PANDANET_INDEX_HTML_PATH} to apply stone rendering overrides at runtime."
         )
     if grid_rgba is not None:
         post_actions.append(f"Patch {PANDANET_SITE_CSS_PATH} to tint {PANDANET_GOBAN_GRID_SELECTOR} with {grid_rgba}.")
@@ -210,14 +210,22 @@ def _apply_replacement_plan(
         destination.parent.mkdir(parents=True, exist_ok=True)
         destination.write_bytes(operation.source_asset.data)
 
+    for variant_assets in plan.theme.stone_variants.values():
+        for asset in variant_assets:
+            destination = extracted_dir / target_path_for_asset(asset)
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            destination.write_bytes(asset.data)
+
     patch_css_asset_references(extracted_dir / PANDANET_SITE_CSS_PATH, asset_refs)
     patch_js_asset_references(extracted_dir / PANDANET_GOPANDA_JS_PATH, asset_refs)
     patch_css_stone_transforms(extracted_dir / PANDANET_SITE_CSS_PATH, plan.theme.stone_transforms)
-    if plan.theme.stone_transforms:
+    stone_variant_refs = build_stone_variant_reference_map(plan.theme)
+    if plan.theme.stone_transforms or stone_variant_refs:
         write_runtime_stone_transform_script(
             extracted_dir / PANDANET_THEME_RUNTIME_JS_PATH,
             plan.theme.stone_transforms,
             asset_refs.js_refs,
+            stone_variant_refs,
         )
         patch_index_html_for_runtime_script(extracted_dir / PANDANET_INDEX_HTML_PATH)
     if grid_filter is not None:
@@ -267,6 +275,14 @@ def patch_background_mode(site_css_path: Path, mode: BackgroundMode, board_css_r
 
     new_block = f"{match.group('prefix')}{''.join(f'{line}\n' for line in replacement_lines)}{match.group('suffix')}"
     site_css_path.write_text(css_text[: match.start()] + new_block + css_text[match.end() :], encoding="utf-8")
+
+
+def build_stone_variant_reference_map(theme: ImportedTheme) -> dict[AssetRole, tuple[str, ...]]:
+    return {
+        role: tuple(js_ref_for_asset(asset) for asset in assets)
+        for role, assets in theme.stone_variants.items()
+        if assets
+    }
 
 
 def build_asset_reference_map(theme: ImportedTheme) -> AssetReferenceMap:
@@ -369,12 +385,16 @@ def write_runtime_stone_transform_script(
     runtime_js_path: Path,
     stone_transforms: dict[AssetRole, StoneTransform],
     js_refs: dict[AssetRole, str],
+    stone_variant_js_refs: dict[AssetRole, tuple[str, ...]],
 ) -> None:
-    if not stone_transforms:
+    if not stone_transforms and not stone_variant_js_refs:
         return
 
     runtime_js_path.parent.mkdir(parents=True, exist_ok=True)
-    runtime_js_path.write_text(build_runtime_stone_transform_script(stone_transforms, js_refs), encoding="utf-8")
+    runtime_js_path.write_text(
+        build_runtime_stone_transform_script(stone_transforms, js_refs, stone_variant_js_refs),
+        encoding="utf-8",
+    )
 
 
 def patch_js_asset_references(
@@ -429,50 +449,79 @@ def _patch_css_block(css_text: str, selector: str, declarations: dict[str, str])
 def build_runtime_stone_transform_script(
     stone_transforms: dict[AssetRole, StoneTransform],
     js_refs: dict[AssetRole, str],
+    stone_variant_js_refs: dict[AssetRole, tuple[str, ...]],
 ) -> str:
-    transform_entries: list[str] = []
+    config_entries: list[str] = []
     for role in (AssetRole.STONE_BLACK, AssetRole.STONE_WHITE):
-        transform = stone_transforms.get(role)
         js_ref = js_refs.get(role)
-        if transform is None or js_ref is None:
+        if js_ref is None:
             continue
-        transform_entries.append(
+        transform = _runtime_transform_for_role(stone_transforms, role)
+        config_entries.append(
             "    "
             + _js_string_literal(js_ref)
-            + ": "
-            + _js_runtime_transform_object(transform)
+            + ": { "
+            + f"left: {_percent_number(transform.left)}, "
+            + f"top: {_percent_number(transform.top)}, "
+            + f"width: {_percent_number(transform.width)}, "
+            + f"height: {_percent_number(transform.height)}, "
+            + "variants: ["
+            + ", ".join(_js_string_literal(ref) for ref in stone_variant_js_refs.get(role, ()))
+            + "] }"
         )
 
-    transforms_block = ",\n".join(transform_entries)
+    configs_block = ",\n".join(config_entries)
     return (
         "(function(){\n"
         "  var proto = CanvasRenderingContext2D && CanvasRenderingContext2D.prototype;\n"
         "  if (!proto) return;\n"
         "  if (proto.__pandanetThemeReplacerDrawImagePatched) return;\n"
-        "  var transforms = {\n"
-        f"{transforms_block}\n"
+        "  var configs = {\n"
+        f"{configs_block}\n"
         "  };\n"
+        "  var variantImages = {};\n"
+        "  var chosenVariantIndexes = {};\n"
         "  var originalDrawImage = proto.drawImage;\n"
-        "  function resolveTransform(image) {\n"
+        "  function resolveConfig(image) {\n"
         "    if (!image) return null;\n"
         "    var src = typeof image.currentSrc === 'string' && image.currentSrc ? image.currentSrc : image.src;\n"
         "    if (typeof src !== 'string') return null;\n"
-        "    for (var key in transforms) {\n"
-        "      if (Object.prototype.hasOwnProperty.call(transforms, key) && src.indexOf(key) !== -1) return transforms[key];\n"
+        "    for (var key in configs) {\n"
+        "      if (Object.prototype.hasOwnProperty.call(configs, key) && src.indexOf(key) !== -1) return { key: key, config: configs[key] };\n"
         "    }\n"
+        "    return null;\n"
+        "  }\n"
+        "  function getVariantImage(configKey, dx, dy, dw, dh) {\n"
+        "    var config = configs[configKey];\n"
+        "    if (!config || !config.variants || config.variants.length === 0) return null;\n"
+        "    if (!variantImages[configKey]) {\n"
+        "      variantImages[configKey] = config.variants.map(function(src) {\n"
+        "        var image = new Image();\n"
+        "        image.src = src;\n"
+        "        return image;\n"
+        "      });\n"
+        "    }\n"
+        "    var selectionKey = [configKey, dx, dy, dw, dh].join('|');\n"
+        "    if (!Object.prototype.hasOwnProperty.call(chosenVariantIndexes, selectionKey)) {\n"
+        "      chosenVariantIndexes[selectionKey] = Math.floor(Math.random() * config.variants.length);\n"
+        "    }\n"
+        "    var image = variantImages[configKey][chosenVariantIndexes[selectionKey]];\n"
+        "    if (image && image.complete && ((image.naturalWidth || 0) > 0 || (image.width || 0) > 0)) return image;\n"
         "    return null;\n"
         "  }\n"
         "  proto.drawImage = function(image, dx, dy, dw, dh) {\n"
         "    if (arguments.length === 5) {\n"
-        "      var transform = resolveTransform(image);\n"
-        "      if (transform) {\n"
+        "      var resolved = resolveConfig(image);\n"
+        "      if (resolved) {\n"
+        "        var config = resolved.config;\n"
+        "        var imageToDraw = getVariantImage(resolved.key, dx, dy, dw, dh) || image;\n"
         "        return originalDrawImage.call(\n"
         "          this,\n"
-        "          image,\n"
-        "          dx + (dw * transform.left / 100),\n"
-        "          dy + (dh * transform.top / 100),\n"
-        "          dw * transform.width / 100,\n"
-        "          dh * transform.height / 100\n"
+        "          imageToDraw,\n"
+        "          dx + (dw * config.left / 100),\n"
+        "          dy + (dh * config.top / 100),\n"
+        "          dw * config.width / 100,\n"
+        "          dh * config.height / 100\n"
         "        );\n"
         "      }\n"
         "    }\n"
@@ -483,15 +532,11 @@ def build_runtime_stone_transform_script(
     )
 
 
-def _js_runtime_transform_object(transform: StoneTransform) -> str:
-    return (
-        "{ "
-        f"left: {_percent_number(transform.left)}, "
-        f"top: {_percent_number(transform.top)}, "
-        f"width: {_percent_number(transform.width)}, "
-        f"height: {_percent_number(transform.height)} "
-        "}"
-    )
+def _runtime_transform_for_role(
+    stone_transforms: dict[AssetRole, StoneTransform],
+    role: AssetRole,
+) -> StoneTransform:
+    return stone_transforms.get(role, StoneTransform(width="100%", height="100%", top="0%", left="0%"))
 
 
 def _js_string_literal(value: str) -> str:

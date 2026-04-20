@@ -16,6 +16,7 @@ from pandanet_theme_replacer.models import (
 from pandanet_theme_replacer.pipeline import (
     build_replacement_plan,
     build_asset_reference_map,
+    build_stone_variant_reference_map,
     build_runtime_stone_transform_script,
     load_input_theme,
     patch_background_mode,
@@ -380,7 +381,7 @@ class ReplacementPlanTests(unittest.TestCase):
             patch_css_asset_references(css_path, refs)
             patch_js_asset_references(js_path, refs)
             patch_css_stone_transforms(css_path, theme.stone_transforms)
-            write_runtime_stone_transform_script(runtime_js_path, theme.stone_transforms, refs.js_refs)
+            write_runtime_stone_transform_script(runtime_js_path, theme.stone_transforms, refs.js_refs, {})
             patch_index_html_for_runtime_script(index_html_path)
             css_text = css_path.read_text(encoding="utf-8")
             js_text = js_path.read_text(encoding="utf-8")
@@ -397,8 +398,8 @@ class ReplacementPlanTests(unittest.TestCase):
         self.assertIn("background-position: -10% -10%;", css_text)
         self.assertIn('a.drawImage(b,f*e,(d-c-1)*e,e,e)', js_text)
         self.assertIn("CanvasRenderingContext2D.prototype", runtime_js_text)
-        self.assertIn('"img/custom/stone-black.png": { left: -16, top: -14, width: 127, height: 127 }', runtime_js_text)
-        self.assertIn('"img/custom/stone-white.png": { left: -10, top: -10, width: 200, height: 200 }', runtime_js_text)
+        self.assertIn('"img/custom/stone-black.png": { left: -16, top: -14, width: 127, height: 127, variants: [] }', runtime_js_text)
+        self.assertIn('"img/custom/stone-white.png": { left: -10, top: -10, width: 200, height: 200, variants: [] }', runtime_js_text)
         self.assertIn("arguments.length === 5", runtime_js_text)
         self.assertIn("src.indexOf(key) !== -1", runtime_js_text)
         self.assertIn('src="js/pandanet-theme-replacer.js"', index_html_text)
@@ -438,10 +439,118 @@ class ReplacementPlanTests(unittest.TestCase):
             {
                 AssetRole.STONE_BLACK: "img/custom/stone-black.svg",
             },
+            {},
         )
 
-        self.assertIn('"img/custom/stone-black.svg": { left: -16, top: -14, width: 127, height: 127 }', script)
+        self.assertIn('"img/custom/stone-black.svg": { left: -16, top: -14, width: 127, height: 127, variants: [] }', script)
         self.assertIn("proto.__pandanetThemeReplacerDrawImagePatched = true;", script)
+
+    def test_build_runtime_stone_transform_script_includes_random_variants(self) -> None:
+        script = build_runtime_stone_transform_script(
+            {
+                AssetRole.STONE_BLACK: StoneTransform(
+                    width="127%",
+                    height="127%",
+                    top="-14%",
+                    left="-16%",
+                ),
+            },
+            {
+                AssetRole.STONE_BLACK: "img/custom/stone-black.png",
+            },
+            {
+                AssetRole.STONE_BLACK: (
+                    "img/custom/stone-black-variant-1.png",
+                    "img/custom/stone-black-variant-2.png",
+                ),
+            },
+        )
+
+        self.assertIn(
+            '"img/custom/stone-black.png": { left: -16, top: -14, width: 127, height: 127, variants: ["img/custom/stone-black-variant-1.png", "img/custom/stone-black-variant-2.png"] }',
+            script,
+        )
+        self.assertIn("var variantImages = {};", script)
+        self.assertIn("var chosenVariantIndexes = {};", script)
+        self.assertIn("Math.floor(Math.random() * config.variants.length)", script)
+
+    def test_load_input_theme_normalizes_random_stone_variants(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            (root / "package.json").write_text('{"name": "variant-theme"}', encoding="utf-8")
+            (root / "styles.css").write_text(
+                """
+                .board { background-image: url("board.png"); }
+                .shudan-stone-image.shudan-sign_1 {
+                    width: 130%;
+                    height: 127%;
+                    top: -14%;
+                    left: -14%;
+                    background-image: url("glass_black2.png");
+                }
+                .shudan-stone-image.shudan-sign_1.shudan-random_1 { background-image: url("glass_black3.png"); }
+                .shudan-stone-image.shudan-sign_1.shudan-random_2 { background-image: url("glass_black4.png"); }
+                .shudan-stone-image.shudan-sign_-1 {
+                    width: 127%;
+                    height: 127%;
+                    top: -14%;
+                    left: -16%;
+                    background-image: url("glass_white3.png");
+                }
+                .shudan-stone-image.shudan-sign_-1.shudan-random_1 { background-image: url("glass_white2.png"); }
+                """,
+                encoding="utf-8",
+            )
+            (root / "board.png").write_bytes(PNG_1X1)
+            (root / "glass_black2.png").write_bytes(PNG_1X1)
+            (root / "glass_black3.png").write_bytes(PNG_1X1)
+            (root / "glass_black4.png").write_bytes(PNG_1X1)
+            (root / "glass_white3.png").write_bytes(PNG_1X1)
+            (root / "glass_white2.png").write_bytes(PNG_1X1)
+
+            theme = load_input_theme(self._make_input_spec(theme_path=root))
+
+        self.assertEqual(
+            [asset.filename for asset in theme.stone_variants[AssetRole.STONE_BLACK]],
+            ["stone-black-variant-1.png", "stone-black-variant-2.png"],
+        )
+        self.assertEqual(
+            [asset.filename for asset in theme.stone_variants[AssetRole.STONE_WHITE]],
+            ["stone-white-variant-1.png"],
+        )
+
+    def test_build_stone_variant_reference_map_uses_custom_paths(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            (root / "package.json").write_text('{"name": "variant-theme"}', encoding="utf-8")
+            (root / "styles.css").write_text(
+                """
+                .board { background-image: url("board.png"); }
+                .shudan-stone-image.shudan-sign_1 {
+                    width: 130%;
+                    height: 127%;
+                    top: -14%;
+                    left: -14%;
+                    background-image: url("glass_black2.png");
+                }
+                .shudan-stone-image.shudan-sign_1.shudan-random_1 { background-image: url("glass_black3.png"); }
+                .shudan-stone-image.shudan.sign_-1 {
+                    background-image: url("glass_white3.png");
+                }
+                """,
+                encoding="utf-8",
+            )
+            (root / "board.png").write_bytes(PNG_1X1)
+            (root / "glass_black2.png").write_bytes(PNG_1X1)
+            (root / "glass_black3.png").write_bytes(PNG_1X1)
+
+            theme = load_input_theme(self._make_input_spec(theme_path=root))
+
+        refs = build_stone_variant_reference_map(theme)
+        self.assertEqual(
+            refs[AssetRole.STONE_BLACK],
+            ("img/custom/stone-black-variant-1.png",),
+        )
 
     def test_patch_grid_color_override_appends_goban_scoped_rule(self) -> None:
         with TemporaryDirectory() as temp_dir:

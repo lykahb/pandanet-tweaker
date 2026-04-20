@@ -24,6 +24,7 @@ STONE_SELECTORS: dict[AssetRole, str] = {
     AssetRole.STONE_BLACK: ".shudan-stone-image.shudan-sign_1",
     AssetRole.STONE_WHITE: ".shudan-stone-image.shudan-sign_-1",
 }
+STONE_RANDOM_SELECTOR_PATTERN = re.compile(r"\.shudan-random_(\d+)\b")
 TRANSFORM_PROPERTIES = ("width", "height", "top", "left")
 
 
@@ -35,6 +36,7 @@ def load_sabaki_theme(prepared: PreparedThemeSource) -> ImportedTheme:
 
     assets = _collect_assets(theme_root, css_path)
     stone_transforms = _extract_stone_transforms(css_path)
+    stone_variants = _extract_stone_variants(theme_root, css_path)
 
     for role in EXPECTED_THEME_ROLES:
         if not any(asset.role == role for asset in assets):
@@ -54,6 +56,7 @@ def load_sabaki_theme(prepared: PreparedThemeSource) -> ImportedTheme:
         version=package_data.get("version"),
         assets=tuple(assets),
         stone_transforms=stone_transforms,
+        stone_variants=stone_variants,
         warnings=tuple(warnings),
         metadata=metadata,
     )
@@ -131,6 +134,8 @@ def _extract_role_assets_from_css(theme_root: Path, css_path: Path) -> list[Them
     css_text = css_path.read_text(encoding="utf-8")
 
     for selectors, declarations in _parse_css_rules(css_text):
+        if any(_extract_random_variant_role(selector) is not None for selector in selectors):
+            continue
         roles = [role for role, selector in STONE_SELECTORS.items() if selector in selectors]
         if not roles:
             continue
@@ -148,6 +153,47 @@ def _extract_role_assets_from_css(theme_root: Path, css_path: Path) -> list[Them
             discovered[f"{role.value}:{asset.source_ref}"] = asset
 
     return list(discovered.values())
+
+
+def _extract_stone_variants(theme_root: Path, css_path: Path | None) -> dict[AssetRole, tuple[ThemeAsset, ...]]:
+    if css_path is None:
+        return {}
+
+    discovered: dict[AssetRole, list[tuple[int, ThemeAsset]]] = {}
+    css_text = css_path.read_text(encoding="utf-8")
+    for selectors, declarations in _parse_css_rules(css_text):
+        role_and_index = None
+        for selector in selectors:
+            role_and_index = _extract_random_variant_role(selector)
+            if role_and_index is not None:
+                break
+        if role_and_index is None:
+            continue
+
+        background_image = _extract_background_image(declarations)
+        if background_image is None:
+            continue
+
+        candidate = (css_path.parent / background_image).resolve()
+        if not candidate.is_file() or candidate.suffix.lower() not in IMAGE_SUFFIXES:
+            continue
+
+        role, index = role_and_index
+        asset = _build_asset(
+            theme_root,
+            candidate,
+            role=role,
+            notes=f"css-random-variant:{index}",
+        )
+        discovered.setdefault(role, []).append((index, asset))
+
+    return {
+        role: tuple(
+            asset
+            for index, asset in sorted(entries, key=lambda item: (item[0], item[1].source_ref))
+        )
+        for role, entries in discovered.items()
+    }
 
 
 def _parse_css_asset_paths(css_path: Path) -> list[Path]:
@@ -221,6 +267,18 @@ def _extract_stone_transforms(css_path: Path | None) -> dict[AssetRole, StoneTra
                     transforms[role] = transform
 
     return transforms
+
+
+def _extract_random_variant_role(selector: str) -> tuple[AssetRole, int] | None:
+    random_match = STONE_RANDOM_SELECTOR_PATTERN.search(selector)
+    if random_match is None:
+        return None
+
+    for role, base_selector in STONE_SELECTORS.items():
+        if base_selector in selector:
+            return (role, int(random_match.group(1)))
+
+    return None
 
 
 def _parse_css_rules(css_text: str) -> list[tuple[list[str], dict[str, str]]]:

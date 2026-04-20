@@ -79,6 +79,7 @@ class ImportedTheme:
     version: str | None
     assets: tuple[ThemeAsset, ...]
     stone_transforms: dict[AssetRole, StoneTransform] = field(default_factory=dict)
+    stone_variants: dict[AssetRole, tuple[ThemeAsset, ...]] = field(default_factory=dict)
     warnings: tuple[str, ...] = ()
     metadata: dict[str, str] = field(default_factory=dict)
 

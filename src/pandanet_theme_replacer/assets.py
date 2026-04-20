@@ -32,6 +32,7 @@ def build_theme_from_input_spec(input_spec: ThemeInputSpec) -> ImportedTheme:
         version=None,
         assets=tuple(assets),
         stone_transforms={},
+        stone_variants={},
         metadata={},
     )
 
@@ -51,6 +52,11 @@ def merge_theme_assets(base_theme: ImportedTheme, overrides: ImportedTheme) -> I
 
     metadata = dict(base_theme.metadata)
     metadata["asset_overrides"] = "true"
+    stone_variants = {
+        role: tuple(assets)
+        for role, assets in base_theme.stone_variants.items()
+        if role not in {asset.role for asset in overrides.assets}
+    }
 
     return ImportedTheme(
         source=base_theme.source,
@@ -60,6 +66,7 @@ def merge_theme_assets(base_theme: ImportedTheme, overrides: ImportedTheme) -> I
         version=base_theme.version,
         assets=tuple(ordered_assets),
         stone_transforms=dict(base_theme.stone_transforms),
+        stone_variants=stone_variants,
         warnings=base_theme.warnings,
         metadata=metadata,
     )
@@ -67,6 +74,13 @@ def merge_theme_assets(base_theme: ImportedTheme, overrides: ImportedTheme) -> I
 
 def normalize_theme_assets(theme: ImportedTheme) -> ImportedTheme:
     normalized_assets = tuple(_normalize_theme_asset(asset) for asset in theme.assets)
+    normalized_variants = {
+        role: tuple(
+            _normalize_theme_variant_asset(role, index, asset)
+            for index, asset in enumerate(assets, start=1)
+        )
+        for role, assets in theme.stone_variants.items()
+    }
     metadata = dict(theme.metadata)
     metadata["normalized_for_targets"] = "true"
 
@@ -78,6 +92,7 @@ def normalize_theme_assets(theme: ImportedTheme) -> ImportedTheme:
         version=theme.version,
         assets=normalized_assets,
         stone_transforms=dict(theme.stone_transforms),
+        stone_variants=normalized_variants,
         warnings=theme.warnings,
         metadata=metadata,
     )
@@ -108,6 +123,17 @@ def _normalize_theme_asset(asset: ThemeAsset) -> ThemeAsset:
     )
 
 
+def _normalize_theme_variant_asset(role: AssetRole, index: int, asset: ThemeAsset) -> ThemeAsset:
+    normalized_filename = _normalized_variant_filename(role, index, asset.filename)
+    return ThemeAsset(
+        role=asset.role,
+        filename=normalized_filename,
+        source_ref=asset.source_ref,
+        data=asset.data,
+        notes=asset.notes or "original-bytes",
+    )
+
+
 def _normalized_filename(role: AssetRole, original_name: str) -> str:
     suffix = Path(original_name).suffix.lower()
     if not suffix:
@@ -121,6 +147,21 @@ def _normalized_filename(role: AssetRole, original_name: str) -> str:
         base = "stone-white"
     else:
         base = Path(original_name).stem
+
+    return f"{base}{suffix}"
+
+
+def _normalized_variant_filename(role: AssetRole, index: int, original_name: str) -> str:
+    suffix = Path(original_name).suffix.lower()
+    if not suffix:
+        suffix = ".bin"
+
+    if role == AssetRole.STONE_BLACK:
+        base = f"stone-black-variant-{index}"
+    elif role == AssetRole.STONE_WHITE:
+        base = f"stone-white-variant-{index}"
+    else:
+        base = f"{Path(original_name).stem}-variant-{index}"
 
     return f"{base}{suffix}"
 

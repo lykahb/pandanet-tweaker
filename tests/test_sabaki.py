@@ -207,6 +207,61 @@ class SabakiImportTests(unittest.TestCase):
 
         self.assertEqual(theme.first_asset_for_role(AssetRole.STONE_BLACK).filename, "glass_black2.png")
         self.assertEqual(theme.first_asset_for_role(AssetRole.STONE_WHITE).filename, "glass_white3.png")
+        self.assertEqual(
+            [asset.filename for asset in theme.stone_variants[AssetRole.STONE_BLACK]],
+            ["glass_black3.png"],
+        )
+        self.assertEqual(
+            [asset.filename for asset in theme.stone_variants[AssetRole.STONE_WHITE]],
+            ["glass_white.png"],
+        )
+
+    def test_collects_multiple_random_variants_per_stone_color(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            (root / "package.json").write_text('{"name": "baduktv-like"}', encoding="utf-8")
+            (root / "styles.css").write_text(
+                """
+                .board { background-image: url("board.png"); }
+                .shudan-stone-image.shudan-sign_1 {
+                    width: 130%;
+                    height: 127%;
+                    top: -14%;
+                    left: -14%;
+                    background-image: url("glass_black2.png");
+                }
+                .shudan-stone-image.shudan-sign_1.shudan-random_1 { background-image: url("glass_black3.png"); }
+                .shudan-stone-image.shudan-sign_1.shudan-random_2 { background-image: url("glass_black4.png"); }
+                .shudan-stone-image.shudan-sign_-1 {
+                    width: 127%;
+                    height: 127%;
+                    top: -14%;
+                    left: -16%;
+                    background-image: url("glass_white3.png");
+                }
+                .shudan-stone-image.shudan-sign_-1.shudan-random_1 { background-image: url("glass_white2.png"); }
+                .shudan-stone-image.shudan-sign_-1.shudan-random_2 { background-image: url("glass_white.png"); }
+                """,
+                encoding="utf-8",
+            )
+            (root / "board.png").write_bytes(b"board")
+            (root / "glass_black2.png").write_bytes(b"primary-black")
+            (root / "glass_black3.png").write_bytes(b"variant-black-1")
+            (root / "glass_black4.png").write_bytes(b"variant-black-2")
+            (root / "glass_white3.png").write_bytes(b"primary-white")
+            (root / "glass_white2.png").write_bytes(b"variant-white-1")
+            (root / "glass_white.png").write_bytes(b"variant-white-2")
+
+            theme = inspect_theme(root)
+
+        self.assertEqual(
+            [asset.filename for asset in theme.stone_variants[AssetRole.STONE_BLACK]],
+            ["glass_black3.png", "glass_black4.png"],
+        )
+        self.assertEqual(
+            [asset.filename for asset in theme.stone_variants[AssetRole.STONE_WHITE]],
+            ["glass_white2.png", "glass_white.png"],
+        )
 
     def test_strips_comments_before_matching_primary_stone_selectors(self) -> None:
         with TemporaryDirectory() as temp_dir:

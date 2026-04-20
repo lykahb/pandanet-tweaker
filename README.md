@@ -140,9 +140,11 @@ To avoid ambiguity:
 ## Asset Handling
 
 - The primary board and stone assets are copied into `app/img/custom/` with their original file extensions preserved.
+- Sabaki random stone variants such as `.shudan-random_1`, `.shudan-random_2`, and similar rules are also copied into `app/img/custom/` when present.
 - `app/css/site.css` is patched to point `.goban`, `.capture.*`, and `.mark.*` at those copied assets.
 - `app/js/gopanda.js` is patched so the main canvas stones load from the copied black and white stone files.
 - When a Sabaki theme defines per-stone `width`, `height`, `top`, and `left` on `.shudan-stone-image.shudan-sign_1` or `.shudan-stone-image.shudan-sign_-1`, the tool keeps the original stone asset, patches related CSS background sizing/positioning, and injects a small runtime script that hooks canvas `drawImage()` for those custom stone files.
+- When Sabaki random stone variants are present, the runtime script chooses a stable random variant per board stone draw location so the stones do not flicker on redraw.
 - `--board-background-mode` only changes how `.goban` renders the board asset: `repeat` or scaled-to-fit.
 - `--grid-rgba` appends a goban-scoped CSS override for `.goban > .grid-canvas`.
 - SVG is the preferred format when available because Electron renders it natively; no rasterization is done for the primary assets.

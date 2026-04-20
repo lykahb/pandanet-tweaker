@@ -142,6 +142,11 @@ def _print_theme_summary(theme) -> None:
     print("Assets:")
     for asset in theme.assets:
         print(f"- {asset.role.value}: {asset.source_ref} ({asset.size} bytes)")
+    if theme.stone_variants:
+        print("Stone Variants:")
+        for role, assets in theme.stone_variants.items():
+            for asset in assets:
+                print(f"- {role.value}-variant: {asset.source_ref} ({asset.size} bytes)")
     if theme.warnings:
         print("Warnings:")
         for warning in theme.warnings:
