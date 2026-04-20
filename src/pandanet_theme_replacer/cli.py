@@ -5,7 +5,7 @@ from pathlib import Path
 import sys
 
 from pandanet_theme_replacer.errors import PandanetThemeReplacerError
-from pandanet_theme_replacer.models import BackgroundMode
+from pandanet_theme_replacer.models import BackgroundMode, ReplaceRequest, ThemeInputSpec
 from pandanet_theme_replacer.pipeline import inspect_theme, replace_theme
 from pandanet_theme_replacer.targets.pandanet import resolve_source_asar_path
 
@@ -102,18 +102,21 @@ def main(argv: list[str] | None = None) -> int:
                 else None
             )
             asar_path = resolve_source_asar_path(args.asar)
-            plan = replace_theme(
-                args.theme,
-                asar_path,
-                args.output,
-                background_path=args.board_background,
-                black_stone_path=args.black_stone,
-                white_stone_path=args.white_stone,
+            request = ReplaceRequest(
+                input_spec=ThemeInputSpec(
+                    theme_path=args.theme,
+                    theme_format=args.format,
+                    board_background_path=args.board_background,
+                    black_stone_path=args.black_stone,
+                    white_stone_path=args.white_stone,
+                ),
+                asar_path=asar_path,
+                output_path=args.output,
                 background_mode=background_mode,
                 grid_rgba=args.grid_rgba,
                 dry_run=args.dry_run,
-                theme_format=args.format,
             )
+            plan = replace_theme(request)
             _print_replacement_plan(plan, asar_path, args.output, args.dry_run)
             return 0
 

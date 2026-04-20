@@ -3,23 +3,18 @@ from __future__ import annotations
 from pathlib import Path
 
 from pandanet_theme_replacer.errors import ThemeImportError
-from pandanet_theme_replacer.models import ImportedTheme, ThemeAsset, AssetRole
+from pandanet_theme_replacer.models import AssetRole, ImportedTheme, ThemeAsset, ThemeInputSpec
 
 
-def build_theme_from_asset_files(
-    *,
-    background_path: Path | None,
-    black_stone_path: Path | None,
-    white_stone_path: Path | None,
-) -> ImportedTheme:
+def build_theme_from_input_spec(input_spec: ThemeInputSpec) -> ImportedTheme:
     assets: list[ThemeAsset] = []
 
-    if background_path is not None:
-        assets.append(_load_asset(AssetRole.BOARD, background_path))
-    if black_stone_path is not None:
-        assets.append(_load_asset(AssetRole.STONE_BLACK, black_stone_path))
-    if white_stone_path is not None:
-        assets.append(_load_asset(AssetRole.STONE_WHITE, white_stone_path))
+    if input_spec.board_background_path is not None:
+        assets.append(_load_asset(AssetRole.BOARD, input_spec.board_background_path))
+    if input_spec.black_stone_path is not None:
+        assets.append(_load_asset(AssetRole.STONE_BLACK, input_spec.black_stone_path))
+    if input_spec.white_stone_path is not None:
+        assets.append(_load_asset(AssetRole.STONE_WHITE, input_spec.white_stone_path))
 
     if not assets:
         raise ThemeImportError(
@@ -27,13 +22,7 @@ def build_theme_from_asset_files(
             "--black-stone, and --white-stone inputs."
         )
 
-    source_root = _common_source_root(
-        [
-            asset_path
-            for asset_path in (background_path, black_stone_path, white_stone_path)
-            if asset_path is not None
-        ]
-    )
+    source_root = _common_source_root(list(input_spec.explicit_asset_paths))
 
     return ImportedTheme(
         source=source_root,

@@ -5,7 +5,7 @@ import re
 from tempfile import TemporaryDirectory
 
 from pandanet_theme_replacer.assets import (
-    build_theme_from_asset_files,
+    build_theme_from_input_spec,
     merge_theme_assets,
     normalize_theme_assets,
 )
@@ -13,12 +13,15 @@ from pandanet_theme_replacer.errors import ConfigurationError, ThemeImportError
 from pandanet_theme_replacer.importers.sabaki import load_sabaki_theme
 from pandanet_theme_replacer.models import (
     AssetRole,
+    AssetReferenceMap,
     BackgroundMode,
     EXPECTED_THEME_ROLES,
     ImportedTheme,
     PlannedReplacement,
+    ReplaceRequest,
     ReplacementPlan,
     StoneTransform,
+    ThemeInputSpec,
 )
 from pandanet_theme_replacer.packaging.asar import extract_asar, pack_asar
 from pandanet_theme_replacer.targets.pandanet import (
@@ -104,36 +107,22 @@ def build_replacement_plan(
     return ReplacementPlan(theme=theme, operations=tuple(operations), post_actions=tuple(post_actions))
 
 
-def replace_theme(
-    theme_path: Path | None,
-    asar_path: Path,
-    output_path: Path,
-    *,
-    background_path: Path | None = None,
-    black_stone_path: Path | None = None,
-    white_stone_path: Path | None = None,
-    background_mode: BackgroundMode | None = None,
-    grid_rgba: str | None = None,
-    dry_run: bool = False,
-    theme_format: str = "auto",
-) -> ReplacementPlan:
-    theme = load_input_theme(
-        theme_path,
-        theme_format=theme_format,
-        background_path=background_path,
-        black_stone_path=black_stone_path,
-        white_stone_path=white_stone_path,
-    )
+def replace_theme(request: ReplaceRequest) -> ReplacementPlan:
+    theme = load_input_theme(request.input_spec)
     grid_filter = None
-    if grid_rgba is not None:
+    if request.grid_rgba is not None:
         try:
-            grid_filter = grid_rgba_to_css_filter(grid_rgba)
+            grid_filter = grid_rgba_to_css_filter(request.grid_rgba)
         except ValueError as exc:
             raise ConfigurationError(f"Invalid --grid-rgba value: {exc}") from exc
 
-    plan = build_replacement_plan(theme, background_mode=background_mode, grid_rgba=grid_rgba)
+    plan = build_replacement_plan(
+        theme,
+        background_mode=request.background_mode,
+        grid_rgba=request.grid_rgba,
+    )
 
-    if dry_run:
+    if request.dry_run:
         return plan
 
     unresolved = [operation for operation in plan.operations if operation.status != "ready"]
@@ -143,8 +132,8 @@ def replace_theme(
             "through a theme or explicit file arguments."
         )
 
-    asar_path = asar_path.expanduser().resolve()
-    output_path = output_path.expanduser().resolve()
+    asar_path = request.asar_path.expanduser().resolve()
+    output_path = request.output_path.expanduser().resolve()
 
     if not asar_path.is_file():
         raise ThemeImportError(f"ASAR file does not exist: {asar_path}")
@@ -170,13 +159,17 @@ def replace_theme(
             write_runtime_stone_transform_script(
                 extracted_dir / PANDANET_THEME_RUNTIME_JS_PATH,
                 plan.theme.stone_transforms,
-                asset_refs[2],
+                asset_refs.js_refs,
             )
             patch_index_html_for_runtime_script(extracted_dir / PANDANET_INDEX_HTML_PATH)
         if grid_filter is not None:
             patch_grid_color_override(extracted_dir / PANDANET_SITE_CSS_PATH, grid_filter)
-        if background_mode is not None:
-            patch_background_mode(extracted_dir / PANDANET_SITE_CSS_PATH, background_mode, asset_refs[0])
+        if request.background_mode is not None:
+            patch_background_mode(
+                extracted_dir / PANDANET_SITE_CSS_PATH,
+                request.background_mode,
+                asset_refs.board_css_ref,
+            )
 
         output_path.parent.mkdir(parents=True, exist_ok=True)
         pack_asar(extracted_dir, output_path)
@@ -184,31 +177,20 @@ def replace_theme(
     return plan
 
 
-def load_input_theme(
-    theme_path: Path | None,
-    *,
-    theme_format: str = "auto",
-    background_path: Path | None = None,
-    black_stone_path: Path | None = None,
-    white_stone_path: Path | None = None,
-) -> ImportedTheme:
+def load_input_theme(input_spec: ThemeInputSpec) -> ImportedTheme:
     explicit_assets = None
-    if any(path is not None for path in (background_path, black_stone_path, white_stone_path)):
-        explicit_assets = build_theme_from_asset_files(
-            background_path=background_path,
-            black_stone_path=black_stone_path,
-            white_stone_path=white_stone_path,
-        )
+    if input_spec.has_explicit_assets:
+        explicit_assets = build_theme_from_input_spec(input_spec)
 
-    if theme_path is None:
+    if input_spec.theme_path is None:
         if explicit_assets is None:
             raise ThemeImportError(
                 "No input theme or assets were provided. Supply a theme path or explicit asset arguments."
             )
         return normalize_theme_assets(explicit_assets)
 
-    with stage_theme_source(theme_path) as prepared:
-        theme = _load_theme(prepared, theme_format)
+    with stage_theme_source(input_spec.theme_path) as prepared:
+        theme = _load_theme(prepared, input_spec.theme_format)
 
     if explicit_assets is not None:
         theme = merge_theme_assets(theme, explicit_assets)
@@ -259,7 +241,7 @@ def patch_background_mode(site_css_path: Path, mode: BackgroundMode, board_css_r
     site_css_path.write_text(css_text[: match.start()] + new_block + css_text[match.end() :], encoding="utf-8")
 
 
-def build_asset_reference_map(theme: ImportedTheme) -> tuple[str, dict[AssetRole, str], dict[AssetRole, str]]:
+def build_asset_reference_map(theme: ImportedTheme) -> AssetReferenceMap:
     css_refs: dict[AssetRole, str] = {}
     js_refs: dict[AssetRole, str] = {}
     board_css_ref = ""
@@ -279,21 +261,24 @@ def build_asset_reference_map(theme: ImportedTheme) -> tuple[str, dict[AssetRole
     if not board_css_ref:
         raise ConfigurationError("Replacement plan did not include a board asset.")
 
-    return board_css_ref, css_refs, js_refs
+    return AssetReferenceMap(
+        board_css_ref=board_css_ref,
+        css_refs=css_refs,
+        js_refs=js_refs,
+    )
 
 
 def patch_css_asset_references(
     site_css_path: Path,
-    asset_refs: tuple[str, dict[AssetRole, str], dict[AssetRole, str]],
+    asset_refs: AssetReferenceMap,
 ) -> None:
     if not site_css_path.is_file():
         raise ConfigurationError(f"Expected CSS file was not found: {site_css_path}")
 
-    board_css_ref, css_refs, _ = asset_refs
     css_text = site_css_path.read_text(encoding="utf-8")
 
     for stock_ref, role in PANDANET_CSS_REF_REPLACEMENTS.items():
-        replacement = board_css_ref if role == AssetRole.BOARD else css_refs[role]
+        replacement = asset_refs.css_ref_for(role)
         css_text = css_text.replace(stock_ref, replacement)
 
     site_css_path.write_text(css_text, encoding="utf-8")
@@ -366,16 +351,15 @@ def write_runtime_stone_transform_script(
 
 def patch_js_asset_references(
     gopanda_js_path: Path,
-    asset_refs: tuple[str, dict[AssetRole, str], dict[AssetRole, str]],
+    asset_refs: AssetReferenceMap,
 ) -> None:
     if not gopanda_js_path.is_file():
         raise ConfigurationError(f"Expected JS file was not found: {gopanda_js_path}")
 
-    _, _, js_refs = asset_refs
     js_text = gopanda_js_path.read_text(encoding="utf-8")
 
     for stock_ref, role in PANDANET_JS_REF_REPLACEMENTS.items():
-        js_text = js_text.replace(stock_ref, js_refs[role])
+        js_text = js_text.replace(stock_ref, asset_refs.js_ref_for(role))
 
     gopanda_js_path.write_text(js_text, encoding="utf-8")
 

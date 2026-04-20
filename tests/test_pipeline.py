@@ -5,7 +5,13 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
 
-from pandanet_theme_replacer.models import AssetRole, BackgroundMode, StoneTransform
+from pandanet_theme_replacer.models import (
+    AssetRole,
+    BackgroundMode,
+    ReplaceRequest,
+    StoneTransform,
+    ThemeInputSpec,
+)
 from pandanet_theme_replacer.pipeline import (
     build_replacement_plan,
     build_asset_reference_map,
@@ -32,6 +38,23 @@ JPEG_1X1 = b64decode(
 
 
 class ReplacementPlanTests(unittest.TestCase):
+    def _make_input_spec(
+        self,
+        *,
+        theme_path: Path | None = None,
+        board_background_path: Path | None = None,
+        black_stone_path: Path | None = None,
+        white_stone_path: Path | None = None,
+        theme_format: str = "auto",
+    ) -> ThemeInputSpec:
+        return ThemeInputSpec(
+            theme_path=theme_path,
+            theme_format=theme_format,
+            board_background_path=board_background_path,
+            black_stone_path=black_stone_path,
+            white_stone_path=white_stone_path,
+        )
+
     def test_resolve_source_asar_prefers_original_archive(self) -> None:
         original_default = pandanet.DEFAULT_ORIGINAL_ASAR_PATH
         app_default = pandanet.DEFAULT_ASAR_PATH
@@ -62,14 +85,17 @@ class ReplacementPlanTests(unittest.TestCase):
             white.write_bytes(PNG_1X1)
 
             plan = replace_theme(
-                None,
-                root / "app.asar",
-                root / "out.asar",
-                background_path=board,
-                black_stone_path=black,
-                white_stone_path=white,
-                background_mode=BackgroundMode.SCALE,
-                dry_run=True,
+                ReplaceRequest(
+                    input_spec=self._make_input_spec(
+                        board_background_path=board,
+                        black_stone_path=black,
+                        white_stone_path=white,
+                    ),
+                    asar_path=root / "app.asar",
+                    output_path=root / "out.asar",
+                    background_mode=BackgroundMode.SCALE,
+                    dry_run=True,
+                )
             )
 
         self.assertEqual(len(plan.operations), 3)
@@ -94,14 +120,17 @@ class ReplacementPlanTests(unittest.TestCase):
             white.write_bytes(PNG_1X1)
 
             plan = replace_theme(
-                None,
-                root / "app.asar",
-                root / "out.asar",
-                background_path=board,
-                black_stone_path=black,
-                white_stone_path=white,
-                grid_rgba="#336699cc",
-                dry_run=True,
+                ReplaceRequest(
+                    input_spec=self._make_input_spec(
+                        board_background_path=board,
+                        black_stone_path=black,
+                        white_stone_path=white,
+                    ),
+                    asar_path=root / "app.asar",
+                    output_path=root / "out.asar",
+                    grid_rgba="#336699cc",
+                    dry_run=True,
+                )
             )
 
         self.assertIn(
@@ -131,8 +160,10 @@ class ReplacementPlanTests(unittest.TestCase):
             override.write_bytes(PNG_1X1)
 
             theme = load_input_theme(
-                theme_root,
-                black_stone_path=override,
+                self._make_input_spec(
+                    theme_path=theme_root,
+                    black_stone_path=override,
+                )
             )
 
         black_asset = theme.first_asset_for_role(AssetRole.STONE_BLACK)
@@ -171,7 +202,7 @@ class ReplacementPlanTests(unittest.TestCase):
             (root / "glass_white.png").write_bytes(PNG_1X1)
             (root / "glass_white3.png").write_bytes(PNG_1X1)
 
-            theme = load_input_theme(root)
+            theme = load_input_theme(self._make_input_spec(theme_path=root))
 
         self.assertEqual(theme.first_asset_for_role(AssetRole.STONE_BLACK).source_ref, "glass_black2.png")
         self.assertEqual(theme.first_asset_for_role(AssetRole.STONE_WHITE).source_ref, "glass_white3.png")
@@ -196,7 +227,7 @@ class ReplacementPlanTests(unittest.TestCase):
             (root / "black.png").write_bytes(PNG_1X1)
             (root / "white.png").write_bytes(PNG_1X1)
 
-            theme = load_input_theme(root)
+            theme = load_input_theme(self._make_input_spec(theme_path=root))
 
         self.assertEqual(theme.first_asset_for_role(AssetRole.BOARD).source_ref, "images/Board.png")
 
@@ -241,7 +272,7 @@ class ReplacementPlanTests(unittest.TestCase):
             (root / "board.svg").write_text(svg, encoding="utf-8")
             (root / "black.svg").write_text(svg, encoding="utf-8")
             (root / "white.svg").write_text(svg, encoding="utf-8")
-            theme = load_input_theme(root)
+            theme = load_input_theme(self._make_input_spec(theme_path=root))
 
             css_path = root / "site.css"
             css_path.write_text(
@@ -302,7 +333,7 @@ class ReplacementPlanTests(unittest.TestCase):
             (root / "glass.png").write_bytes(PNG_1X1)
             (root / "snow.png").write_bytes(PNG_1X1)
 
-            theme = load_input_theme(root)
+            theme = load_input_theme(self._make_input_spec(theme_path=root))
             refs = build_asset_reference_map(theme)
             css_path = root / "site.css"
             css_path.write_text(
@@ -348,19 +379,17 @@ class ReplacementPlanTests(unittest.TestCase):
             patch_css_asset_references(css_path, refs)
             patch_js_asset_references(js_path, refs)
             patch_css_stone_transforms(css_path, theme.stone_transforms)
-            write_runtime_stone_transform_script(runtime_js_path, theme.stone_transforms, refs[2])
+            write_runtime_stone_transform_script(runtime_js_path, theme.stone_transforms, refs.js_refs)
             patch_index_html_for_runtime_script(index_html_path)
             css_text = css_path.read_text(encoding="utf-8")
             js_text = js_path.read_text(encoding="utf-8")
             runtime_js_text = runtime_js_path.read_text(encoding="utf-8")
             index_html_text = index_html_path.read_text(encoding="utf-8")
 
-        css_refs = refs[1]
-        js_refs = refs[2]
-        self.assertEqual(css_refs[AssetRole.STONE_BLACK], "../img/custom/stone-black.png")
-        self.assertEqual(css_refs[AssetRole.STONE_WHITE], "../img/custom/stone-white.png")
-        self.assertEqual(js_refs[AssetRole.STONE_BLACK], "img/custom/stone-black.png")
-        self.assertEqual(js_refs[AssetRole.STONE_WHITE], "img/custom/stone-white.png")
+        self.assertEqual(refs.css_refs[AssetRole.STONE_BLACK], "../img/custom/stone-black.png")
+        self.assertEqual(refs.css_refs[AssetRole.STONE_WHITE], "../img/custom/stone-white.png")
+        self.assertEqual(refs.js_refs[AssetRole.STONE_BLACK], "img/custom/stone-black.png")
+        self.assertEqual(refs.js_refs[AssetRole.STONE_WHITE], "img/custom/stone-white.png")
         self.assertIn("background-size: 127% 127%;", css_text)
         self.assertIn("background-position: -16% -14%;", css_text)
         self.assertIn("background-size: 200% 200%;", css_text)

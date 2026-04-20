@@ -46,6 +46,31 @@ class StoneTransform:
 
 
 @dataclass(frozen=True)
+class ThemeInputSpec:
+    theme_path: Path | None = None
+    theme_format: str = "auto"
+    board_background_path: Path | None = None
+    black_stone_path: Path | None = None
+    white_stone_path: Path | None = None
+
+    @property
+    def explicit_asset_paths(self) -> tuple[Path, ...]:
+        paths: list[Path] = []
+        for path in (
+            self.board_background_path,
+            self.black_stone_path,
+            self.white_stone_path,
+        ):
+            if path is not None:
+                paths.append(path)
+        return tuple(paths)
+
+    @property
+    def has_explicit_assets(self) -> bool:
+        return bool(self.explicit_asset_paths)
+
+
+@dataclass(frozen=True)
 class ImportedTheme:
     source: Path
     root: Path
@@ -90,6 +115,29 @@ class ReplacementPlan:
             if operation.status != "ready":
                 unresolved.append(operation.role)
         return tuple(unresolved)
+
+
+@dataclass(frozen=True)
+class ReplaceRequest:
+    input_spec: ThemeInputSpec
+    asar_path: Path
+    output_path: Path
+    background_mode: BackgroundMode | None = None
+    grid_rgba: str | None = None
+    dry_run: bool = False
+
+
+@dataclass(frozen=True)
+class AssetReferenceMap:
+    board_css_ref: str
+    css_refs: dict[AssetRole, str]
+    js_refs: dict[AssetRole, str]
+
+    def css_ref_for(self, role: AssetRole) -> str:
+        return self.board_css_ref if role == AssetRole.BOARD else self.css_refs[role]
+
+    def js_ref_for(self, role: AssetRole) -> str:
+        return self.js_refs[role]
 
 
 def _asset_priority(role: AssetRole, asset: ThemeAsset) -> tuple[int, str]:
