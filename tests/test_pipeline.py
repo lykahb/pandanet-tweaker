@@ -4,6 +4,7 @@ from base64 import b64decode
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
+from unittest.mock import patch
 
 from pandanet_theme_replacer.models import (
     AssetRole,
@@ -454,6 +455,156 @@ class ReplacementPlanTests(unittest.TestCase):
         self.assertIn(".goban > .grid-canvas {", css_text)
         self.assertIn("filter: ", css_text)
         self.assertIn("opacity: 0.8;", css_text)
+
+    def test_replace_with_cache_reuses_extracted_tree_and_restores_patched_files(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            asar_path = root / "original-app.asar"
+            asar_path.write_bytes(b"asar-1")
+            cache_dir = root / "cache"
+            output_path = root / "out.asar"
+
+            board = root / "board.jpg"
+            board.write_bytes(JPEG_1X1)
+            black = root / "black.png"
+            black.write_bytes(PNG_1X1)
+            white = root / "white.png"
+            white.write_bytes(PNG_1X1)
+
+            board_second = root / "board-second.jpg"
+            board_second.write_bytes(JPEG_1X1 + b"second")
+
+            extract_calls: list[Path] = []
+            pack_calls: list[tuple[Path, Path]] = []
+
+            def fake_extract(_: Path, destination: Path) -> None:
+                extract_calls.append(destination)
+                (destination / "app/css").mkdir(parents=True, exist_ok=True)
+                (destination / "app/js").mkdir(parents=True, exist_ok=True)
+                (destination / "app").mkdir(exist_ok=True)
+                (destination / "app/css/site.css").write_text(
+                    """
+                    .goban { background: url("../img/wood-board.jpg") repeat; }
+                    .capture.white { background: url("../img/50/stone-black-w-shadow.png") no-repeat; }
+                    .capture.black { background: url("../img/50/stone-white-w-shadow.png") no-repeat; }
+                    .mark.white { background-image: url("../img/50/stone-white.png"); }
+                    .mark.black { background-image: url("../img/50/stone-black.png"); }
+                    """.strip()
+                    + "\n",
+                    encoding="utf-8",
+                )
+                (destination / "app/js/gopanda.js").write_text(
+                    'function Qwa(){e0.src="img/50/stone-black.png";f0.src="img/50/stone-white.png";}',
+                    encoding="utf-8",
+                )
+                (destination / "app/index.html").write_text(
+                    '<script src="js/gopanda.js" type="text/javascript"></script>\n',
+                    encoding="utf-8",
+                )
+
+            def fake_pack(source_directory: Path, packed_output: Path) -> None:
+                pack_calls.append((source_directory, packed_output))
+                packed_output.write_text("packed\n", encoding="utf-8")
+
+            request = ReplaceRequest(
+                input_spec=self._make_input_spec(
+                    board_background_path=board,
+                    black_stone_path=black,
+                    white_stone_path=white,
+                ),
+                asar_path=asar_path,
+                output_path=output_path,
+                cache_asar_dir=cache_dir,
+            )
+            second_request = ReplaceRequest(
+                input_spec=self._make_input_spec(
+                    board_background_path=board_second,
+                    black_stone_path=black,
+                    white_stone_path=white,
+                ),
+                asar_path=asar_path,
+                output_path=output_path,
+                cache_asar_dir=cache_dir,
+            )
+
+            with (
+                patch("pandanet_theme_replacer.cache.extract_asar", side_effect=fake_extract),
+                patch("pandanet_theme_replacer.pipeline.pack_asar", side_effect=fake_pack),
+            ):
+                replace_theme(request)
+
+                site_css_path = cache_dir / "app/css/site.css"
+                custom_dir = cache_dir / "app/img/custom"
+                self.assertIn("../img/custom/board.jpg", site_css_path.read_text(encoding="utf-8"))
+                (site_css_path).write_text("corrupt\n", encoding="utf-8")
+                (custom_dir / "stale.txt").write_text("stale\n", encoding="utf-8")
+
+                replace_theme(second_request)
+
+            self.assertEqual(len(extract_calls), 1)
+            self.assertEqual(len(pack_calls), 2)
+            self.assertEqual(pack_calls[0][0], cache_dir.resolve())
+            self.assertEqual(pack_calls[1][0], cache_dir.resolve())
+            self.assertTrue((cache_dir / "__pandanet_theme_replacer/original/app/css/site.css").is_file())
+            self.assertNotIn("corrupt", (cache_dir / "app/css/site.css").read_text(encoding="utf-8"))
+            self.assertFalse((cache_dir / "app/img/custom/stale.txt").exists())
+            self.assertEqual((cache_dir / "app/img/custom/board.jpg").read_bytes(), board_second.read_bytes())
+
+    def test_replace_with_cache_reextracts_when_source_asar_changes(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            asar_path = root / "original-app.asar"
+            asar_path.write_bytes(b"asar-1")
+            cache_dir = root / "cache"
+            output_path = root / "out.asar"
+
+            board = root / "board.jpg"
+            board.write_bytes(JPEG_1X1)
+            black = root / "black.png"
+            black.write_bytes(PNG_1X1)
+            white = root / "white.png"
+            white.write_bytes(PNG_1X1)
+
+            extract_calls: list[Path] = []
+
+            def fake_extract(_: Path, destination: Path) -> None:
+                extract_calls.append(destination)
+                (destination / "app/css").mkdir(parents=True, exist_ok=True)
+                (destination / "app/js").mkdir(parents=True, exist_ok=True)
+                (destination / "app").mkdir(exist_ok=True)
+                (destination / "app/css/site.css").write_text(
+                    '.goban { background: url("../img/wood-board.jpg") repeat; }\n',
+                    encoding="utf-8",
+                )
+                (destination / "app/js/gopanda.js").write_text(
+                    'function Qwa(){e0.src="img/50/stone-black.png";f0.src="img/50/stone-white.png";}\n',
+                    encoding="utf-8",
+                )
+                (destination / "app/index.html").write_text(
+                    '<script src="js/gopanda.js" type="text/javascript"></script>\n',
+                    encoding="utf-8",
+                )
+
+            request = ReplaceRequest(
+                input_spec=self._make_input_spec(
+                    board_background_path=board,
+                    black_stone_path=black,
+                    white_stone_path=white,
+                ),
+                asar_path=asar_path,
+                output_path=output_path,
+                cache_asar_dir=cache_dir,
+            )
+
+            with (
+                patch("pandanet_theme_replacer.cache.extract_asar", side_effect=fake_extract),
+                patch("pandanet_theme_replacer.pipeline.pack_asar"),
+            ):
+                replace_theme(request)
+                asar_path.write_bytes(b"asar-2")
+                replace_theme(request)
+
+            self.assertEqual(len(extract_calls), 2)
 
 
 if __name__ == "__main__":

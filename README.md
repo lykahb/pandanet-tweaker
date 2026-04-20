@@ -91,6 +91,19 @@ uv run pandanet-theme-replacer replace \
 
 When `--asar` is omitted, the tool looks for `/Applications/GoPanda2.app/Contents/Resources/original-app.asar` first and falls back to `app.asar`.
 
+If you plan to try multiple themes repeatedly, add a persistent extracted cache so the tool does not unpack the original archive on every run:
+
+```bash
+uv run pandanet-theme-replacer replace \
+  /path/to/theme \
+  --cache-asar-dir ~/.cache/pandanet-theme-replacer/gopanda \
+  --output ./build/app.asar
+```
+
+This option is mainly for iterative theme testing, not a one-off replacement.
+
+When `--cache-asar-dir` is set, the tool extracts the source ASAR into that directory once, stores backups of the files it patches under `__pandanet_theme_replacer/original/`, restores those files before each run, clears `app/img/custom/`, and then applies the new theme in place. That makes repeated theme swaps much faster than re-extracting the whole archive each time.
+
 ## Install Into App
 
 By default, the tool writes the patched archive to `build/app.asar`, which is ready for Finder replacement.

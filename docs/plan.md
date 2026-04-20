@@ -46,6 +46,7 @@ Status:
 Responsibilities:
 
 - Extract `app.asar`.
+- Optionally reuse a persistent extracted cache directory for repeated theme swaps and restore only the files mutated by the tool between runs.
 - Copy custom board and stone assets into `app/img/custom/`.
 - Patch stock CSS and JS references to point at those copied assets.
 - Patch related CSS sizing/positioning and inject a small runtime script for canvas stone drawing when Sabaki themes specify stone scale and offset in CSS.

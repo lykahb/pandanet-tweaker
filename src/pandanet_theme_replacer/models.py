@@ -122,6 +122,7 @@ class ReplaceRequest:
     input_spec: ThemeInputSpec
     asar_path: Path
     output_path: Path
+    cache_asar_dir: Path | None = None
     background_mode: BackgroundMode | None = None
     grid_rgba: str | None = None
     dry_run: bool = False

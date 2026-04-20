@@ -47,6 +47,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Output path for the repacked app.asar.",
     )
     replace_parser.add_argument(
+        "--cache-asar-dir",
+        type=Path,
+        help="Persistent extracted ASAR cache directory for repeated theme testing. Use this when you plan to apply multiple themes over time and want to avoid unpacking the source ASAR on every run.",
+    )
+    replace_parser.add_argument(
         "--format", choices=("auto", "sabaki"), default="auto", help="Theme input format."
     )
     replace_parser.add_argument(
@@ -112,6 +117,7 @@ def main(argv: list[str] | None = None) -> int:
                 ),
                 asar_path=asar_path,
                 output_path=args.output,
+                cache_asar_dir=args.cache_asar_dir,
                 background_mode=background_mode,
                 grid_rgba=args.grid_rgba,
                 dry_run=args.dry_run,

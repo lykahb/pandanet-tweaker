@@ -9,6 +9,7 @@ from pandanet_theme_replacer.assets import (
     merge_theme_assets,
     normalize_theme_assets,
 )
+from pandanet_theme_replacer.cache import prepare_cached_asar_dir, restore_cached_asar_dir
 from pandanet_theme_replacer.errors import ConfigurationError, ThemeImportError
 from pandanet_theme_replacer.importers.sabaki import load_sabaki_theme
 from pandanet_theme_replacer.models import (
@@ -138,41 +139,28 @@ def replace_theme(request: ReplaceRequest) -> ReplacementPlan:
     if not asar_path.is_file():
         raise ThemeImportError(f"ASAR file does not exist: {asar_path}")
 
+    if request.cache_asar_dir is not None:
+        extracted_dir = restore_cached_asar_dir(prepare_cached_asar_dir(request.cache_asar_dir, asar_path))
+        _apply_replacement_plan(
+            extracted_dir,
+            plan,
+            background_mode=request.background_mode,
+            grid_filter=grid_filter,
+            output_path=output_path,
+        )
+        return plan
+
     with TemporaryDirectory(prefix="pandanet-asar-") as temp_dir:
         temp_root = Path(temp_dir)
         extracted_dir = temp_root / "app"
         extract_asar(asar_path, extracted_dir)
-
-        asset_refs = build_asset_reference_map(plan.theme)
-        for operation in plan.operations:
-            assert operation.source_asset is not None
-            assert operation.target_relative_path is not None
-
-            destination = extracted_dir / operation.target_relative_path
-            destination.parent.mkdir(parents=True, exist_ok=True)
-            destination.write_bytes(operation.source_asset.data)
-
-        patch_css_asset_references(extracted_dir / PANDANET_SITE_CSS_PATH, asset_refs)
-        patch_js_asset_references(extracted_dir / PANDANET_GOPANDA_JS_PATH, asset_refs)
-        patch_css_stone_transforms(extracted_dir / PANDANET_SITE_CSS_PATH, plan.theme.stone_transforms)
-        if plan.theme.stone_transforms:
-            write_runtime_stone_transform_script(
-                extracted_dir / PANDANET_THEME_RUNTIME_JS_PATH,
-                plan.theme.stone_transforms,
-                asset_refs.js_refs,
-            )
-            patch_index_html_for_runtime_script(extracted_dir / PANDANET_INDEX_HTML_PATH)
-        if grid_filter is not None:
-            patch_grid_color_override(extracted_dir / PANDANET_SITE_CSS_PATH, grid_filter)
-        if request.background_mode is not None:
-            patch_background_mode(
-                extracted_dir / PANDANET_SITE_CSS_PATH,
-                request.background_mode,
-                asset_refs.board_css_ref,
-            )
-
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        pack_asar(extracted_dir, output_path)
+        _apply_replacement_plan(
+            extracted_dir,
+            plan,
+            background_mode=request.background_mode,
+            grid_filter=grid_filter,
+            output_path=output_path,
+        )
 
     return plan
 
@@ -203,6 +191,46 @@ def _load_theme(prepared, theme_format: str) -> ImportedTheme:
         raise ThemeImportError(f"Unsupported theme format: {theme_format}")
 
     return load_sabaki_theme(prepared)
+
+
+def _apply_replacement_plan(
+    extracted_dir: Path,
+    plan: ReplacementPlan,
+    *,
+    background_mode: BackgroundMode | None,
+    grid_filter,
+    output_path: Path,
+) -> None:
+    asset_refs = build_asset_reference_map(plan.theme)
+    for operation in plan.operations:
+        assert operation.source_asset is not None
+        assert operation.target_relative_path is not None
+
+        destination = extracted_dir / operation.target_relative_path
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_bytes(operation.source_asset.data)
+
+    patch_css_asset_references(extracted_dir / PANDANET_SITE_CSS_PATH, asset_refs)
+    patch_js_asset_references(extracted_dir / PANDANET_GOPANDA_JS_PATH, asset_refs)
+    patch_css_stone_transforms(extracted_dir / PANDANET_SITE_CSS_PATH, plan.theme.stone_transforms)
+    if plan.theme.stone_transforms:
+        write_runtime_stone_transform_script(
+            extracted_dir / PANDANET_THEME_RUNTIME_JS_PATH,
+            plan.theme.stone_transforms,
+            asset_refs.js_refs,
+        )
+        patch_index_html_for_runtime_script(extracted_dir / PANDANET_INDEX_HTML_PATH)
+    if grid_filter is not None:
+        patch_grid_color_override(extracted_dir / PANDANET_SITE_CSS_PATH, grid_filter)
+    if background_mode is not None:
+        patch_background_mode(
+            extracted_dir / PANDANET_SITE_CSS_PATH,
+            background_mode,
+            asset_refs.board_css_ref,
+        )
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    pack_asar(extracted_dir, output_path)
 
 
 def patch_background_mode(site_css_path: Path, mode: BackgroundMode, board_css_ref: str) -> None:
