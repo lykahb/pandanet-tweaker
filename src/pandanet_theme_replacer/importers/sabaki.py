@@ -26,6 +26,13 @@ STONE_SELECTORS: dict[AssetRole, str] = {
 }
 STONE_RANDOM_SELECTOR_PATTERN = re.compile(r"\.shudan-random_(\d+)\b")
 TRANSFORM_PROPERTIES = ("width", "height", "top", "left")
+SHUDAN_DEFAULT_STONE_SCALE = 0.92
+SHUDAN_DEFAULT_STONE_TRANSFORM = StoneTransform(
+    width="92%",
+    height="92%",
+    top="4%",
+    left="4%",
+)
 
 
 def load_sabaki_theme(prepared: PreparedThemeSource) -> ImportedTheme:
@@ -255,7 +262,10 @@ def _classify_role(relative_path: Path) -> AssetRole:
 
 def _extract_stone_transforms(css_path: Path | None) -> dict[AssetRole, StoneTransform]:
     if css_path is None:
-        return {}
+        return {
+            AssetRole.STONE_BLACK: SHUDAN_DEFAULT_STONE_TRANSFORM,
+            AssetRole.STONE_WHITE: SHUDAN_DEFAULT_STONE_TRANSFORM,
+        }
 
     transforms: dict[AssetRole, StoneTransform] = {}
     css_text = css_path.read_text(encoding="utf-8")
@@ -264,7 +274,10 @@ def _extract_stone_transforms(css_path: Path | None) -> dict[AssetRole, StoneTra
             if selector in selectors:
                 transform = _extract_stone_transform(declarations)
                 if transform is not None:
-                    transforms[role] = transform
+                    transforms[role] = _adjust_sabaki_stone_transform(transform)
+
+    for role in STONE_SELECTORS:
+        transforms.setdefault(role, SHUDAN_DEFAULT_STONE_TRANSFORM)
 
     return transforms
 
@@ -338,3 +351,30 @@ def _normalize_percentage(value: str) -> str | None:
     if re.fullmatch(r"-?\d+(?:\.\d+)?%", compact) is None:
         return None
     return compact
+
+
+def _adjust_sabaki_stone_transform(transform: StoneTransform) -> StoneTransform:
+    width = _percent_value(transform.width)
+    height = _percent_value(transform.height)
+    left = _percent_value(transform.left)
+    top = _percent_value(transform.top)
+
+    adjusted_width = width * SHUDAN_DEFAULT_STONE_SCALE
+    adjusted_height = height * SHUDAN_DEFAULT_STONE_SCALE
+    adjusted_left = left + (width - adjusted_width) / 2
+    adjusted_top = top + (height - adjusted_height) / 2
+
+    return StoneTransform(
+        width=_format_percentage(adjusted_width),
+        height=_format_percentage(adjusted_height),
+        top=_format_percentage(adjusted_top),
+        left=_format_percentage(adjusted_left),
+    )
+
+
+def _percent_value(value: str) -> float:
+    return float(value.removesuffix("%"))
+
+
+def _format_percentage(value: float) -> str:
+    return format(value, ".3f").rstrip("0").rstrip(".") + "%"

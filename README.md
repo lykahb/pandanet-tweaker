@@ -143,7 +143,8 @@ To avoid ambiguity:
 - Sabaki random stone variants such as `.shudan-random_1`, `.shudan-random_2`, and similar rules are also copied into `app/img/custom/` when present.
 - `app/css/site.css` is patched to point `.goban`, `.capture.*`, and `.mark.*` at those copied assets.
 - `app/js/gopanda.js` is patched so the main canvas stones load from the copied black and white stone files.
-- When a Sabaki theme defines per-stone `width`, `height`, `top`, and `left` on `.shudan-stone-image.shudan-sign_1` or `.shudan-stone-image.shudan-sign_-1`, the tool keeps the original stone asset, patches related CSS background sizing/positioning, and injects a small runtime script that hooks canvas `drawImage()` for those custom stone files.
+- Sabaki imports are normalized to match Shudan's smaller default stone footprint. Shudan effectively draws stones at about `92%` of the point size, while Pandanet uses the full point size, so imported Sabaki stone transforms are scaled down before they are applied in Pandanet.
+- When a Sabaki theme defines per-stone `width`, `height`, `top`, and `left` on `.shudan-stone-image.shudan-sign_1` or `.shudan-stone-image.shudan-sign_-1`, the tool normalizes those percentage values in Python, patches related CSS background sizing/positioning, and injects a small runtime script that applies the same numeric transform to canvas `drawImage()` calls for the custom stone files.
 - When Sabaki random stone variants are present, the runtime script chooses a stable random variant per board stone draw location so the stones do not flicker on redraw.
 - `--board-background-mode` only changes how `.goban` renders the board asset: `repeat` or scaled-to-fit.
 - `--grid-rgba` appends a goban-scoped CSS override for `.goban > .grid-canvas`.

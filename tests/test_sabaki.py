@@ -131,10 +131,10 @@ class SabakiImportTests(unittest.TestCase):
 
         self.assertEqual(theme.first_asset_for_role(AssetRole.STONE_BLACK).filename, "glass.png")
         self.assertEqual(theme.first_asset_for_role(AssetRole.STONE_WHITE).filename, "snow.png")
-        self.assertEqual(theme.stone_transforms[AssetRole.STONE_BLACK].width, "127%")
-        self.assertEqual(theme.stone_transforms[AssetRole.STONE_BLACK].left, "-16%")
-        self.assertEqual(theme.stone_transforms[AssetRole.STONE_WHITE].height, "200%")
-        self.assertEqual(theme.stone_transforms[AssetRole.STONE_WHITE].top, "-10%")
+        self.assertEqual(theme.stone_transforms[AssetRole.STONE_BLACK].width, "116.84%")
+        self.assertEqual(theme.stone_transforms[AssetRole.STONE_BLACK].left, "-10.92%")
+        self.assertEqual(theme.stone_transforms[AssetRole.STONE_WHITE].height, "184%")
+        self.assertEqual(theme.stone_transforms[AssetRole.STONE_WHITE].top, "-2%")
 
     def test_prefers_css_role_match_for_primary_stone_asset(self) -> None:
         with TemporaryDirectory() as temp_dir:
@@ -297,8 +297,23 @@ class SabakiImportTests(unittest.TestCase):
 
         self.assertEqual(theme.first_asset_for_role(AssetRole.STONE_BLACK).filename, "glass_black2.png")
         self.assertEqual(theme.first_asset_for_role(AssetRole.STONE_WHITE).filename, "glass_white3.png")
-        self.assertEqual(theme.stone_transforms[AssetRole.STONE_BLACK].width, "130%")
-        self.assertEqual(theme.stone_transforms[AssetRole.STONE_WHITE].width, "127%")
+        self.assertEqual(theme.stone_transforms[AssetRole.STONE_BLACK].width, "119.6%")
+        self.assertEqual(theme.stone_transforms[AssetRole.STONE_WHITE].width, "116.84%")
+
+    def test_defaults_stone_transforms_to_shudan_inset_when_theme_has_no_css(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            (root / "package.json").write_text('{"name": "no-css"}', encoding="utf-8")
+            (root / "board.png").write_bytes(b"board")
+            (root / "black.png").write_bytes(b"black")
+            (root / "white.png").write_bytes(b"white")
+
+            theme = inspect_theme(root)
+
+        self.assertEqual(theme.stone_transforms[AssetRole.STONE_BLACK].width, "92%")
+        self.assertEqual(theme.stone_transforms[AssetRole.STONE_BLACK].left, "4%")
+        self.assertEqual(theme.stone_transforms[AssetRole.STONE_WHITE].height, "92%")
+        self.assertEqual(theme.stone_transforms[AssetRole.STONE_WHITE].top, "4%")
 
 
 if __name__ == "__main__":

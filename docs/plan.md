@@ -19,7 +19,7 @@ Responsibilities:
 - Discover the image assets referenced by the theme CSS.
 - Convert them into internal semantic roles: `board`, `stone-black`, `stone-white`.
 - Preserve the original asset bytes and extensions so Electron can render SVG natively.
-- Extract narrow stone placement metadata from Sabaki CSS when it is expressed through `.shudan-stone-image.shudan-sign_1` and `.shudan-stone-image.shudan-sign_-1`.
+- Extract narrow stone placement metadata from Sabaki CSS when it is expressed through `.shudan-stone-image.shudan-sign_1` and `.shudan-stone-image.shudan-sign_-1`, then scale it down to compensate for Shudan's smaller default stone footprint before applying it in Pandanet.
 - Allow direct asset arguments to override imported theme assets.
 
 Status:

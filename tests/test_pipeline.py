@@ -392,14 +392,14 @@ class ReplacementPlanTests(unittest.TestCase):
         self.assertEqual(refs.css_refs[AssetRole.STONE_WHITE], "../img/custom/stone-white.png")
         self.assertEqual(refs.js_refs[AssetRole.STONE_BLACK], "img/custom/stone-black.png")
         self.assertEqual(refs.js_refs[AssetRole.STONE_WHITE], "img/custom/stone-white.png")
-        self.assertIn("background-size: 127% 127%;", css_text)
-        self.assertIn("background-position: -16% -14%;", css_text)
-        self.assertIn("background-size: 200% 200%;", css_text)
-        self.assertIn("background-position: -10% -10%;", css_text)
+        self.assertIn("background-size: 116.84% 116.84%;", css_text)
+        self.assertIn("background-position: -10.92% -8.92%;", css_text)
+        self.assertIn("background-size: 184% 184%;", css_text)
+        self.assertIn("background-position: -2% -2%;", css_text)
         self.assertIn('a.drawImage(b,f*e,(d-c-1)*e,e,e)', js_text)
         self.assertIn("CanvasRenderingContext2D.prototype", runtime_js_text)
-        self.assertIn('"img/custom/stone-black.png": { left: -16, top: -14, width: 127, height: 127, variants: [] }', runtime_js_text)
-        self.assertIn('"img/custom/stone-white.png": { left: -10, top: -10, width: 200, height: 200, variants: [] }', runtime_js_text)
+        self.assertIn('"img/custom/stone-black.png": { left: -10.92, top: -8.92, width: 116.84, height: 116.84, variants: [] }', runtime_js_text)
+        self.assertIn('"img/custom/stone-white.png": { left: -2, top: -2, width: 184, height: 184, variants: [] }', runtime_js_text)
         self.assertIn("arguments.length === 5", runtime_js_text)
         self.assertIn("src.indexOf(key) !== -1", runtime_js_text)
         self.assertIn('src="js/pandanet-theme-replacer.js"', index_html_text)
@@ -430,10 +430,10 @@ class ReplacementPlanTests(unittest.TestCase):
         script = build_runtime_stone_transform_script(
             {
                 AssetRole.STONE_BLACK: StoneTransform(
-                    width="127%",
-                    height="127%",
-                    top="-14%",
-                    left="-16%",
+                    width="116.84%",
+                    height="116.84%",
+                    top="-8.92%",
+                    left="-10.92%",
                 ),
             },
             {
@@ -442,17 +442,17 @@ class ReplacementPlanTests(unittest.TestCase):
             {},
         )
 
-        self.assertIn('"img/custom/stone-black.svg": { left: -16, top: -14, width: 127, height: 127, variants: [] }', script)
+        self.assertIn('"img/custom/stone-black.svg": { left: -10.92, top: -8.92, width: 116.84, height: 116.84, variants: [] }', script)
         self.assertIn("proto.__pandanetThemeReplacerDrawImagePatched = true;", script)
 
     def test_build_runtime_stone_transform_script_includes_random_variants(self) -> None:
         script = build_runtime_stone_transform_script(
             {
                 AssetRole.STONE_BLACK: StoneTransform(
-                    width="127%",
-                    height="127%",
-                    top="-14%",
-                    left="-16%",
+                    width="116.84%",
+                    height="116.84%",
+                    top="-8.92%",
+                    left="-10.92%",
                 ),
             },
             {
@@ -467,7 +467,7 @@ class ReplacementPlanTests(unittest.TestCase):
         )
 
         self.assertIn(
-            '"img/custom/stone-black.png": { left: -16, top: -14, width: 127, height: 127, variants: ["img/custom/stone-black-variant-1.png", "img/custom/stone-black-variant-2.png"] }',
+            '"img/custom/stone-black.png": { left: -10.92, top: -8.92, width: 116.84, height: 116.84, variants: ["img/custom/stone-black-variant-1.png", "img/custom/stone-black-variant-2.png"] }',
             script,
         )
         self.assertIn("var variantImages = {};", script)
