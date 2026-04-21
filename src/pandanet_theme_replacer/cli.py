@@ -87,7 +87,7 @@ def build_parser() -> argparse.ArgumentParser:
         default=0.0,
         help=(
             "Apply Shudan-style fuzzy stone placement. The value is a fraction of the "
-            "drawn stone diameter and must be between 0 and 0.5."
+            "drawn stone diameter and must be between 0 and 0.5. The value 0.04 looks most natural."
         ),
     )
     replace_parser.add_argument(

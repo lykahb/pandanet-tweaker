@@ -58,6 +58,7 @@ INDEX_HTML_RUNTIME_SCRIPT_PATTERN = re.compile(
 INDEX_HTML_GOPANDA_SCRIPT_PATTERN = re.compile(
     r'(?P<tag><script src="js/gopanda\.js" type="text/javascript"></script>)'
 )
+# Keep these minified patch anchors documented in docs/pandanet-js-patches.md.
 GOPANDA_INCREMENTAL_REDRAW_SNIPPET = "function V0(a,b){var c=J(a);a=t(c,Rw);c=t(c,lB);w0(a,b);return U0(a,c,b)}"
 GOPANDA_FULL_REDRAW_SNIPPET = "function V0(a,b){return W0(a)}"
 GOPANDA_GOBAN_CANVAS_CREATION_SNIPPET = (
@@ -497,6 +498,7 @@ def patch_js_asset_references(
 
 
 def patch_js_force_full_board_redraw(gopanda_js_path: Path) -> None:
+    # Upgrade notes for this seam live in docs/pandanet-js-patches.md.
     if not gopanda_js_path.is_file():
         raise ConfigurationError(f"Expected JS file was not found: {gopanda_js_path}")
 
@@ -512,6 +514,7 @@ def patch_js_force_full_board_redraw(gopanda_js_path: Path) -> None:
 
 
 def patch_js_expand_goban_canvas(gopanda_js_path: Path) -> None:
+    # Upgrade notes for this seam live in docs/pandanet-js-patches.md.
     if not gopanda_js_path.is_file():
         raise ConfigurationError(f"Expected JS file was not found: {gopanda_js_path}")
 
@@ -542,6 +545,7 @@ def patch_js_expand_goban_canvas(gopanda_js_path: Path) -> None:
 
 
 def patch_js_translate_expanded_goban_context(gopanda_js_path: Path) -> None:
+    # Upgrade notes for this seam live in docs/pandanet-js-patches.md.
     if not gopanda_js_path.is_file():
         raise ConfigurationError(f"Expected JS file was not found: {gopanda_js_path}")
 
