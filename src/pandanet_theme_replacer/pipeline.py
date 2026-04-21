@@ -9,7 +9,6 @@ from pandanet_theme_replacer.assets import (
     merge_theme_assets,
     normalize_theme_assets,
 )
-from pandanet_theme_replacer.cache import prepare_cached_asar_dir, restore_cached_asar_dir
 from pandanet_theme_replacer.errors import ConfigurationError, ThemeImportError
 from pandanet_theme_replacer.importers.sabaki import load_sabaki_theme
 from pandanet_theme_replacer.models import (
@@ -24,7 +23,7 @@ from pandanet_theme_replacer.models import (
     StoneTransform,
     ThemeInputSpec,
 )
-from pandanet_theme_replacer.packaging.asar import extract_asar, pack_asar
+from pandanet_theme_replacer.packaging.asar import read_asar_file, rebuild_asar
 from pandanet_theme_replacer.targets.pandanet import (
     PANDANET_GOBAN_GRID_SELECTOR,
     PANDANET_GOBAN_SHADOW_SELECTOR,
@@ -203,32 +202,15 @@ def replace_theme(request: ReplaceRequest) -> ReplacementPlan:
     if not asar_path.is_file():
         raise ThemeImportError(f"ASAR file does not exist: {asar_path}")
 
-    if request.cache_asar_dir is not None:
-        extracted_dir = restore_cached_asar_dir(prepare_cached_asar_dir(request.cache_asar_dir, asar_path))
-        _apply_replacement_plan(
-            extracted_dir,
-            plan,
-            background_mode=request.background_mode,
-            grid_filter=grid_filter,
-            fuzzy_stone_placement=request.fuzzy_stone_placement,
-            disable_default_shadows=request.disable_default_shadows,
-            output_path=output_path,
-        )
-        return plan
-
-    with TemporaryDirectory(prefix="pandanet-asar-") as temp_dir:
-        temp_root = Path(temp_dir)
-        extracted_dir = temp_root / "app"
-        extract_asar(asar_path, extracted_dir)
-        _apply_replacement_plan(
-            extracted_dir,
-            plan,
-            background_mode=request.background_mode,
-            grid_filter=grid_filter,
-            fuzzy_stone_placement=request.fuzzy_stone_placement,
-            disable_default_shadows=request.disable_default_shadows,
-            output_path=output_path,
-        )
+    _apply_replacement_plan_direct(
+        asar_path,
+        plan,
+        background_mode=request.background_mode,
+        grid_filter=grid_filter,
+        fuzzy_stone_placement=request.fuzzy_stone_placement,
+        disable_default_shadows=request.disable_default_shadows,
+        output_path=output_path,
+    )
 
     return plan
 
@@ -261,8 +243,8 @@ def _load_theme(prepared, theme_format: str) -> ImportedTheme:
     return load_sabaki_theme(prepared)
 
 
-def _apply_replacement_plan(
-    extracted_dir: Path,
+def _apply_replacement_plan_direct(
+    source_asar_path: Path,
     plan: ReplacementPlan,
     *,
     background_mode: BackgroundMode | None,
@@ -272,52 +254,69 @@ def _apply_replacement_plan(
     output_path: Path,
 ) -> None:
     asset_refs = build_asset_reference_map(plan.theme)
+    stone_variant_refs = build_stone_variant_reference_map(plan.theme)
+    needs_runtime = bool(plan.theme.stone_transforms or stone_variant_refs or fuzzy_stone_placement > 0)
+
+    replacements: dict[Path, bytes] = {}
     for operation in plan.operations:
         assert operation.source_asset is not None
         assert operation.target_relative_path is not None
-
-        destination = extracted_dir / operation.target_relative_path
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        destination.write_bytes(operation.source_asset.data)
+        replacements[operation.target_relative_path] = operation.source_asset.data
 
     for variant_assets in plan.theme.stone_variants.values():
         for asset in variant_assets:
-            destination = extracted_dir / target_path_for_asset(asset)
-            destination.parent.mkdir(parents=True, exist_ok=True)
-            destination.write_bytes(asset.data)
+            replacements[target_path_for_asset(asset)] = asset.data
 
-    patch_css_asset_references(extracted_dir / PANDANET_SITE_CSS_PATH, asset_refs)
-    patch_js_asset_references(extracted_dir / PANDANET_GOPANDA_JS_PATH, asset_refs)
-    if plan.theme.stone_transforms or fuzzy_stone_placement > 0:
-        patch_js_expand_goban_canvas(extracted_dir / PANDANET_GOPANDA_JS_PATH)
-        patch_js_translate_expanded_goban_context(extracted_dir / PANDANET_GOPANDA_JS_PATH)
-        patch_js_force_full_board_redraw(extracted_dir / PANDANET_GOPANDA_JS_PATH)
-    patch_shadow_canvas_override(
-        extracted_dir / PANDANET_SITE_CSS_PATH,
-        disable_default_shadows=disable_default_shadows,
-    )
-    patch_css_stone_transforms(extracted_dir / PANDANET_SITE_CSS_PATH, plan.theme.stone_transforms)
-    stone_variant_refs = build_stone_variant_reference_map(plan.theme)
-    if plan.theme.stone_transforms or stone_variant_refs or fuzzy_stone_placement > 0:
-        write_runtime_stone_transform_script(
-            extracted_dir / PANDANET_THEME_RUNTIME_JS_PATH,
-            plan.theme.stone_transforms,
-            asset_refs.js_refs,
-            stone_variant_refs,
-            fuzzy_stone_placement,
+    with TemporaryDirectory(prefix="pandanet-asar-direct-") as temp_dir:
+        temp_root = Path(temp_dir)
+        site_css_path = _stage_asar_file_for_patch(source_asar_path, temp_root, PANDANET_SITE_CSS_PATH)
+        gopanda_js_path = _stage_asar_file_for_patch(source_asar_path, temp_root, PANDANET_GOPANDA_JS_PATH)
+
+        patch_css_asset_references(site_css_path, asset_refs)
+        patch_js_asset_references(gopanda_js_path, asset_refs)
+        if plan.theme.stone_transforms or fuzzy_stone_placement > 0:
+            patch_js_expand_goban_canvas(gopanda_js_path)
+            patch_js_translate_expanded_goban_context(gopanda_js_path)
+            patch_js_force_full_board_redraw(gopanda_js_path)
+        patch_shadow_canvas_override(
+            site_css_path,
+            disable_default_shadows=disable_default_shadows,
         )
-        patch_index_html_for_runtime_script(extracted_dir / PANDANET_INDEX_HTML_PATH)
-    if grid_filter is not None:
-        patch_grid_color_override(extracted_dir / PANDANET_SITE_CSS_PATH, grid_filter)
-    if background_mode is not None:
-        patch_background_mode(
-            extracted_dir / PANDANET_SITE_CSS_PATH,
-            background_mode,
-            asset_refs.board_css_ref,
-        )
+        patch_css_stone_transforms(site_css_path, plan.theme.stone_transforms)
+        if needs_runtime:
+            runtime_js_path = temp_root / PANDANET_THEME_RUNTIME_JS_PATH
+            write_runtime_stone_transform_script(
+                runtime_js_path,
+                plan.theme.stone_transforms,
+                asset_refs.js_refs,
+                stone_variant_refs,
+                fuzzy_stone_placement,
+            )
+            index_html_path = _stage_asar_file_for_patch(source_asar_path, temp_root, PANDANET_INDEX_HTML_PATH)
+            patch_index_html_for_runtime_script(index_html_path)
+            replacements[PANDANET_INDEX_HTML_PATH] = index_html_path.read_bytes()
+            replacements[PANDANET_THEME_RUNTIME_JS_PATH] = runtime_js_path.read_bytes()
+        if grid_filter is not None:
+            patch_grid_color_override(site_css_path, grid_filter)
+        if background_mode is not None:
+            patch_background_mode(
+                site_css_path,
+                background_mode,
+                asset_refs.board_css_ref,
+            )
+
+        replacements[PANDANET_SITE_CSS_PATH] = site_css_path.read_bytes()
+        replacements[PANDANET_GOPANDA_JS_PATH] = gopanda_js_path.read_bytes()
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    pack_asar(extracted_dir, output_path)
+    rebuild_asar(source_asar_path, output_path, replacements)
+
+
+def _stage_asar_file_for_patch(source_asar_path: Path, temp_root: Path, relative_path: Path) -> Path:
+    staged_path = temp_root / relative_path
+    staged_path.parent.mkdir(parents=True, exist_ok=True)
+    staged_path.write_bytes(read_asar_file(source_asar_path, relative_path))
+    return staged_path
 
 
 def patch_background_mode(site_css_path: Path, mode: BackgroundMode, board_css_ref: str) -> None:

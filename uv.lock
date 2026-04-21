@@ -3,6 +3,21 @@ revision = 3
 requires-python = ">=3.12"
 
 [[package]]
+name = "asar"
+version = "0.1.2"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/b3/0c/96ac68808a4a9a670c830aafc933b19c07c556d389a357a7e34ffb340353/asar-0.1.2.tar.gz", hash = "sha256:d30f39605ad8b81819c4cd38f22cc8cbdbf90a55fcd656b3dd42fe3605c1bfd4", size = 9013, upload-time = "2024-09-13T05:20:17.604Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/e0/81/0448bea943764286643f29f2f37acc7ee9c4c8f3dfea3c8f8b2785697d28/asar-0.1.2-py3-none-any.whl", hash = "sha256:614db63b5bc1fb39b16fe2dca4dd08ac023a32d7516453fbcdc901a31f7b9d9e", size = 8496, upload-time = "2024-09-13T05:20:16.093Z" },
+]
+
+[[package]]
 name = "pandanet-theme-replacer"
 version = "0.1.0"
 source = { editable = "." }
+dependencies = [
+    { name = "asar" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "asar", specifier = ">=0.1.2" }]

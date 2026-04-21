@@ -10,7 +10,7 @@ For repeatable theming, keep the clean upstream archive alongside it as:
 
 `/Applications/GoPanda2.app/Contents/Resources/original-app.asar`
 
-The project is built with Python and `uv`. Python handles asset loading, optional Sabaki theme import, planning, CSS and JS patching, and file replacement orchestration. ASAR extraction and packing are routed through Electron's maintained CLI via `asar` or `npm exec --package=@electron/asar asar --`.
+The project is built with Python and `uv`. Python handles asset loading, optional Sabaki theme import, planning, CSS and JS patching, file replacement orchestration, and ASAR handling through the Python [`asar`](https://pypi.org/project/asar/) package.
 
 ## Scope
 
@@ -26,7 +26,7 @@ The project is built with Python and `uv`. Python handles asset loading, optiona
 - Copy those assets into the patched archive and redirect Pandanet's CSS/JS references to them.
 - Patch the client CSS so the goban board texture can either repeat or scale.
 - Optionally tint the goban grid canvas with a CSS filter derived from a target RGBA color.
-- Extract, replace, and repack a new `.asar`.
+- Rebuild a new `.asar` directly from the source archive while overwriting only the files the tool changes.
 
 ## Current State
 
@@ -93,18 +93,11 @@ uv run pandanet-theme-replacer replace \
 
 When `--asar` is omitted, the tool looks for `/Applications/GoPanda2.app/Contents/Resources/original-app.asar` first and falls back to `app.asar`.
 
-If you plan to try multiple themes repeatedly, add a persistent extracted cache so the tool does not unpack the original archive on every run:
+If you want to skip extracting the whole archive to the filesystem first, enable direct ASAR rebuild:
 
-```bash
-uv run pandanet-theme-replacer replace \
-  /path/to/theme \
-  --cache-asar-dir ~/.cache/pandanet-theme-replacer/gopanda \
-  --output ./build/app.asar
-```
+`replace` now always rebuilds the output ASAR directly from the source archive. It stages only the files the tool patches, overwrites those paths in a new archive, and leaves the installed Pandanet bundle untouched unless you replace the output yourself.
 
-This option is mainly for iterative theme testing, not a one-off replacement.
-
-When `--cache-asar-dir` is set, the tool extracts the source ASAR into that directory once, stores backups of the files it patches under `__pandanet_theme_replacer/original/`, restores those files before each run, clears `app/img/custom/`, and then applies the new theme in place. That makes repeated theme swaps much faster than re-extracting the whole archive each time.
+This flow is meant to start from a clean `original-app.asar` source. If you point it at an already patched archive, old extra files from earlier theme runs can remain in the output because the tool overwrites files but does not delete stale custom paths from the source archive.
 
 ## Install Into App
 
@@ -171,6 +164,7 @@ The override is scoped to `.goban > .grid-canvas` because the `grid-canvas` clas
 - `README.md`: project description and usage.
 - `docs/plan.md`: build plan and milestones.
 - `docs/pandanet-assets.md`: Pandanet client asset inventory and target mapping notes.
+- `docs/pandanet-js-patches.md`: minified `gopanda.js` patch ledger for future app upgrades.
 - `src/`: Python package and CLI.
 - `tests/`: initial unit tests.
 - `AGENTS.md`: project-specific guidance for future coding agents.
@@ -188,5 +182,6 @@ python3 -m unittest discover -s tests -t . -v
 - Sabaki theme examples: <https://github.com/billhails/SabakiThemes>
   - Repository README confirms themes are installed inside Sabaki as downloadable theme files.
   - The current importer makes a conservative inference from Sabaki package structure and CSS asset references.
+- Python ASAR library: <https://pypi.org/project/asar/>
 - Pandanet app inventory:
-  - Extracted from `/Applications/GoPanda2.app/Contents/Resources/app.asar` on April 18, 2026 with `npm exec --package=@electron/asar asar`.
+  - Extracted from `/Applications/GoPanda2.app/Contents/Resources/app.asar` on April 18, 2026.
