@@ -151,9 +151,10 @@ To avoid ambiguity:
 - `--board-background-mode` only changes how `.goban` renders the board asset: `repeat` or scaled-to-fit.
 - `--grid-rgba` appends a goban-scoped CSS override for `.goban > .grid-canvas`.
 - `--fuzzy-stone-placement` adds Shudan-style jitter to board stones. The value is a fraction of the drawn stone diameter, from `0` to `0.5`.
+- The last-move ring follows fuzzy placement through the same injected runtime script. The script records the real shifted stone center when the custom stone is drawn on the goban canvas, then adjusts the next marker-sized `arc()` call on that canvas by the same offset.
 - `--disable-default-shadows` hides `.goban canvas.shadow-canvas`, and it is enabled by default. Use `--no-disable-default-shadows` if you want to keep Pandanet's stock centered shadow layer.
 - SVG is the preferred format when available because Electron renders it natively; no rasterization is done for the primary assets.
-- The fuzzy placement pattern follows Shudan's eight-direction shift map and neighbor-conflict suppression from `Goban.js` and `helper.js`, but the offset magnitude is scaled by the CLI value instead of being fixed in CSS.
+- The fuzzy placement pattern follows Shudan's eight-direction shift map and neighbor-conflict suppression from `Goban.js` and `helper.js`, but the offset magnitude is scaled by the CLI value instead of being fixed in CSS. The tool does not patch Pandanet's hidden local `v0(...)` marker function directly, because that binding is not reachable through `window`; the `arc()` adjustment is the reliable seam.
 
 ## Grid Override
 

@@ -507,11 +507,13 @@ def build_runtime_stone_transform_script(
     fuzzy_stone_placement: float,
 ) -> str:
     config_entries: list[str] = []
+    role_config_entries: list[str] = []
     for role in (AssetRole.STONE_BLACK, AssetRole.STONE_WHITE):
         js_ref = js_refs.get(role)
         if js_ref is None:
             continue
         transform = _runtime_transform_for_role(stone_transforms, role)
+        role_key = "black" if role == AssetRole.STONE_BLACK else "white"
         config_entries.append(
             "    "
             + _js_string_literal(js_ref)
@@ -524,8 +526,18 @@ def build_runtime_stone_transform_script(
             + ", ".join(_js_string_literal(ref) for ref in stone_variant_js_refs.get(role, ()))
             + "] }"
         )
+        role_config_entries.append(
+            "    "
+            + role_key
+            + ": { "
+            + f"left: {_percent_number(transform.left)}, "
+            + f"top: {_percent_number(transform.top)}, "
+            + f"width: {_percent_number(transform.width)}, "
+            + f"height: {_percent_number(transform.height)} }}"
+        )
 
     configs_block = ",\n".join(config_entries)
+    role_configs_block = ",\n".join(role_config_entries)
     return (
         "(function(){\n"
         "  var proto = CanvasRenderingContext2D && CanvasRenderingContext2D.prototype;\n"
@@ -534,12 +546,20 @@ def build_runtime_stone_transform_script(
         "  var configs = {\n"
         f"{configs_block}\n"
         "  };\n"
+        "  var stoneRoleConfigs = {\n"
+        f"{role_configs_block}\n"
+        "  };\n"
         "  var variantImages = {};\n"
         "  var chosenVariantIndexes = {};\n"
         "  var chosenShifts = {};\n"
+        "  var markerStateKey = '__pandanetThemeReplacerPendingMarkerState';\n"
         "  var originalDrawImage = proto.drawImage;\n"
+        "  var originalArc = proto.arc;\n"
         f"  var fuzzyStonePlacement = {format(fuzzy_stone_placement, 'g')};\n"
         "  var diagonalScale = Math.SQRT1_2 || (1 / Math.sqrt(2));\n"
+        "  function cljsEq(left, right) {\n"
+        "    return typeof D !== 'undefined' && D && typeof D.l === 'function' ? D.l(left, right) : left === right;\n"
+        "  }\n"
         "  function resolveConfig(image) {\n"
         "    if (!image) return null;\n"
         "    var src = typeof image.currentSrc === 'string' && image.currentSrc ? image.currentSrc : image.src;\n"
@@ -601,9 +621,13 @@ def build_runtime_stone_transform_script(
         "  }\n"
         "  function getShiftForStone(ctx, dx, dy, dw, dh) {\n"
         "    if (!(fuzzyStonePlacement > 0)) return 0;\n"
-        "    var boardKey = boardKeyFor(ctx, dw, dh);\n"
         "    var cellX = Math.round(dx / dw);\n"
         "    var cellY = Math.round(dy / dh);\n"
+        "    return getShiftForCell(ctx, cellX, cellY, dw, dh);\n"
+        "  }\n"
+        "  function getShiftForCell(ctx, cellX, cellY, dw, dh) {\n"
+        "    if (!(fuzzyStonePlacement > 0)) return 0;\n"
+        "    var boardKey = boardKeyFor(ctx, dw, dh);\n"
         "    var key = cellKeyFor(boardKey, cellX, cellY);\n"
         "    if (!Object.prototype.hasOwnProperty.call(chosenShifts, key)) {\n"
         "      chosenShifts[key] = randomInt(8);\n"
@@ -629,6 +653,28 @@ def build_runtime_stone_transform_script(
         "      default: return { x: 0, y: 0 };\n"
         "    }\n"
         "  }\n"
+        "  function setPendingMarkerState(ctx, baseCenterX, baseCenterY, shiftedCenterX, shiftedCenterY, cellSize) {\n"
+        "    if (!ctx) return;\n"
+        "    ctx[markerStateKey] = {\n"
+        "      centerX: baseCenterX,\n"
+        "      centerY: baseCenterY,\n"
+        "      offsetX: shiftedCenterX - baseCenterX,\n"
+        "      offsetY: shiftedCenterY - baseCenterY,\n"
+        "      cellSize: cellSize\n"
+        "    };\n"
+        "  }\n"
+        "  function clearPendingMarkerState(ctx) {\n"
+        "    if (!ctx) return;\n"
+        "    delete ctx[markerStateKey];\n"
+        "  }\n"
+        "  function isLikelyMarkerArc(ctx, state, x, y, r) {\n"
+        "    if (!state) return false;\n"
+        "    var centerTolerance = Math.max(0.5, state.cellSize * 0.02);\n"
+        "    if (Math.abs(x - state.centerX) > centerTolerance || Math.abs(y - state.centerY) > centerTolerance) return false;\n"
+        "    if (!(r > state.cellSize * 0.2 && r < state.cellSize * 0.35)) return false;\n"
+        "    var lineWidth = typeof ctx.lineWidth === 'number' ? ctx.lineWidth : 0;\n"
+        "    return lineWidth >= state.cellSize * 0.04 && lineWidth <= state.cellSize * 0.12;\n"
+        "  }\n"
         "  proto.drawImage = function(image, dx, dy, dw, dh) {\n"
         "    if (arguments.length === 5) {\n"
         "      var resolved = resolveConfig(image);\n"
@@ -638,17 +684,30 @@ def build_runtime_stone_transform_script(
         "        var drawWidth = dw * config.width / 100;\n"
         "        var drawHeight = dh * config.height / 100;\n"
         "        var fuzzyOffset = getFuzzyOffset(getShiftForStone(this, dx, dy, dw, dh), drawWidth, drawHeight);\n"
+        "        var finalDx = dx + (dw * config.left / 100) + fuzzyOffset.x;\n"
+        "        var finalDy = dy + (dh * config.top / 100) + fuzzyOffset.y;\n"
+        "        setPendingMarkerState(this, dx + dw / 2, dy + dh / 2, finalDx + drawWidth / 2, finalDy + drawHeight / 2, Math.min(dw, dh));\n"
         "        return originalDrawImage.call(\n"
         "          this,\n"
         "          imageToDraw,\n"
-        "          dx + (dw * config.left / 100) + fuzzyOffset.x,\n"
-        "          dy + (dh * config.top / 100) + fuzzyOffset.y,\n"
+        "          finalDx,\n"
+        "          finalDy,\n"
         "          drawWidth,\n"
         "          drawHeight\n"
         "        );\n"
         "      }\n"
         "    }\n"
+        "    clearPendingMarkerState(this);\n"
         "    return originalDrawImage.apply(this, arguments);\n"
+        "  };\n"
+        "  proto.arc = function(x, y, r, startAngle, endAngle, counterclockwise) {\n"
+        "    var state = this && this[markerStateKey];\n"
+        "    if (isLikelyMarkerArc(this, state, x, y, r)) {\n"
+        "      x += state.offsetX;\n"
+        "      y += state.offsetY;\n"
+        "      clearPendingMarkerState(this);\n"
+        "    }\n"
+        "    return originalArc.call(this, x, y, r, startAngle, endAngle, counterclockwise);\n"
         "  };\n"
         "  proto.__pandanetThemeReplacerDrawImagePatched = true;\n"
         "}());\n"

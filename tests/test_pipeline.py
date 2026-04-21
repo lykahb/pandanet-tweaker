@@ -542,6 +542,10 @@ class ReplacementPlanTests(unittest.TestCase):
         self.assertIn("chosenShifts[key] = randomInt(8);", script)
         self.assertIn("var diagonalScale = Math.SQRT1_2 || (1 / Math.sqrt(2));", script)
         self.assertIn("drawWidth * fuzzyStonePlacement", script)
+        self.assertIn("var originalArc = proto.arc;", script)
+        self.assertIn("setPendingMarkerState(this, dx + dw / 2, dy + dh / 2, finalDx + drawWidth / 2, finalDy + drawHeight / 2, Math.min(dw, dh));", script)
+        self.assertIn("proto.arc = function(x, y, r, startAngle, endAngle, counterclockwise)", script)
+        self.assertIn("if (isLikelyMarkerArc(this, state, x, y, r)) {", script)
 
     def test_replace_dry_run_reports_fuzzy_stone_placement_post_actions(self) -> None:
         with TemporaryDirectory() as temp_dir:

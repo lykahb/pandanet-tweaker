@@ -50,6 +50,7 @@ Responsibilities:
 - Copy custom board and stone assets into `app/img/custom/`.
 - Patch stock CSS and JS references to point at those copied assets.
 - Patch related CSS sizing/positioning and inject a small runtime script for canvas stone drawing when Sabaki themes specify stone scale and offset in CSS.
+- Keep the last-move marker aligned with shifted stones by reusing the injected runtime script rather than patching hidden local functions in the minified Pandanet bundle.
 - Optionally append a goban-scoped CSS filter rule to tint the grid canvas.
 - Patch the CSS goban board texture mode between `repeat` and `scale`.
 - Repack to a new `.asar`.

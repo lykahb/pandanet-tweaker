@@ -97,6 +97,13 @@ For stone scaling and offset, the tool currently supports a narrow subset of Sab
 
 When those are present with percentage values, the tool keeps the original stone asset, scales the imported values down to compensate for Shudan's default `calc(100% - .08em)` stone inset, patches CSS background sizing/positioning for non-canvas stone uses, and injects a small runtime script into the app so Electron adjusts canvas `drawImage()` calls for the custom stone files. This avoids rasterization and avoids fragile surgery inside Pandanet's minified JS bundle.
 
+For fuzzy placement and last-move marker alignment, the runtime script uses two separate seams:
+
+- it wraps `CanvasRenderingContext2D.prototype.drawImage` for the custom goban stone assets and records the final shifted stone center that was actually rendered
+- it wraps `CanvasRenderingContext2D.prototype.arc` and applies that recorded offset to the next marker-sized arc on the same goban canvas context
+
+That `arc()` hook is used instead of trying to override Pandanet's internal `v0(...)` marker function. In the extracted client, `v0(...)` is a local compiled binding rather than `window.v0`, so replacing `window.v0` has no effect on the actual marker path.
+
 ## Open Questions
 
 - How should Sabaki stone assets be transformed into Pandanet's `-w-shadow` and `variation-*` derivatives?
