@@ -60,6 +60,38 @@ INDEX_HTML_GOPANDA_SCRIPT_PATTERN = re.compile(
 )
 GOPANDA_INCREMENTAL_REDRAW_SNIPPET = "function V0(a,b){var c=J(a);a=t(c,Rw);c=t(c,lB);w0(a,b);return U0(a,c,b)}"
 GOPANDA_FULL_REDRAW_SNIPPET = "function V0(a,b){return W0(a)}"
+GOPANDA_GOBAN_CANVAS_CREATION_SNIPPET = (
+    'function K4(a,b){var c=J(b);b=t(c,lD);c=t(c,Cz);return new Sf(null,J4(a,"grid-canvas",c),'
+    'new Sf(null,J4(a,"shadow-canvas",b),new Sf(null,J4(a,"goban-canvas",b),null,1,null),2,null),3,null)}'
+)
+GOPANDA_GOBAN_CANVAS_EXPANDED_CREATION_SNIPPET = (
+    'function K4(a,b){var c=J(b);b=t(c,lD);c=t(c,Cz);return new Sf(null,J4(a,"grid-canvas",c),'
+    'new Sf(null,J4(a,"shadow-canvas",b),new Sf(null,J4(a,"goban-canvas",c),null,1,null),2,null),3,null)}'
+)
+GOPANDA_GOBAN_CANVAS_POSITION_SNIPPET = (
+    'OT(function(){var n=W(F(["goban-canvas",a]));return Z.j?Z.j(n):Z.call(null,n)}(),'
+    'new l(null,2,[Ky,ou.j(b),Qz,ou.j(b)],null),F(["px"]));'
+)
+GOPANDA_GOBAN_CANVAS_EXPANDED_POSITION_SNIPPET = (
+    'OT(function(){var n=W(F(["goban-canvas",a]));return Z.j?Z.j(n):Z.call(null,n)}(),'
+    'new l(null,2,[Ky,0,Qz,0],null),F(["px"]));'
+)
+GOPANDA_GOBAN_CANVAS_POSITION_PATTERN = re.compile(
+    r'OT\(function\(\)\{var n=\s*W\(F\(\["goban-canvas",a\]\)\);return Z\.j\?Z\.j\(n\):Z\.call\(null,n\)\}\(\),'
+    r'new l\(null,2,\[Ky,ou\.j\(b\),Qz,ou\.j\(b\)\],null\),F\(\["px"\]\)\);'
+)
+GOPANDA_Q0_CONTEXT_SNIPPET = (
+    'function q0(a,b,c,d){var e=function(){var k=W(F(["goban-canvas",a]));return Z.j?Z.j(k):Z.call(null,k)}(),'
+    'f=function(){var k=W(F(["grid-canvas",a]));return Z.j?Z.j(k):Z.call(null,k)}(),'
+    'g=function(){var k=W(F(["shadow-canvas",a]));return Z.j?Z.j(k):Z.call(null,k)}();'
+    'return jk([Xr,jx,Qia,yca,QA,R,Qx,voa,Uy,rH],[f.getContext("2d"),c,g,e,g.getContext("2d"),a,d,f,e.getContext("2d"),b])}'
+)
+GOPANDA_Q0_CONTEXT_PATCHED_SNIPPET = (
+    'function q0(a,b,c,d){var e=function(){var k=W(F(["goban-canvas",a]));return Z.j?Z.j(k):Z.call(null,k)}(),'
+    'f=function(){var k=W(F(["grid-canvas",a]));return Z.j?Z.j(k):Z.call(null,k)}(),'
+    'g=function(){var k=W(F(["shadow-canvas",a]));return Z.j?Z.j(k):Z.call(null,k)}();'
+    'return jk([Xr,jx,Qia,yca,QA,R,Qx,voa,Uy,rH],[f.getContext("2d"),c,g,e,g.getContext("2d"),a,d,f,window.__pandanetThemeReplacerInstallGobanContext?window.__pandanetThemeReplacerInstallGobanContext(e.getContext("2d"),d):e.getContext("2d"),b])}'
+)
 
 
 def inspect_theme(theme_path: Path, theme_format: str = "auto") -> ImportedTheme:
@@ -116,6 +148,12 @@ def build_replacement_plan(
             f"Inject {PANDANET_THEME_RUNTIME_JS_PATH} and patch {PANDANET_INDEX_HTML_PATH} to apply stone rendering overrides at runtime."
         )
     if theme.stone_transforms or fuzzy_stone_placement > 0:
+        post_actions.append(
+            f"Patch {PANDANET_GOPANDA_JS_PATH} so goban-canvas uses the full board bounds instead of the inset inner bounds."
+        )
+        post_actions.append(
+            f"Patch {PANDANET_GOPANDA_JS_PATH} so the expanded goban context keeps Pandanet's original inset as a drawing translation."
+        )
         post_actions.append(
             f"Patch {PANDANET_GOPANDA_JS_PATH} so review-mode cell redraws use full-board redraw instead."
         )
@@ -250,6 +288,8 @@ def _apply_replacement_plan(
     patch_css_asset_references(extracted_dir / PANDANET_SITE_CSS_PATH, asset_refs)
     patch_js_asset_references(extracted_dir / PANDANET_GOPANDA_JS_PATH, asset_refs)
     if plan.theme.stone_transforms or fuzzy_stone_placement > 0:
+        patch_js_expand_goban_canvas(extracted_dir / PANDANET_GOPANDA_JS_PATH)
+        patch_js_translate_expanded_goban_context(extracted_dir / PANDANET_GOPANDA_JS_PATH)
         patch_js_force_full_board_redraw(extracted_dir / PANDANET_GOPANDA_JS_PATH)
     patch_shadow_canvas_override(
         extracted_dir / PANDANET_SITE_CSS_PATH,
@@ -471,6 +511,51 @@ def patch_js_force_full_board_redraw(gopanda_js_path: Path) -> None:
     gopanda_js_path.write_text(patched, encoding="utf-8")
 
 
+def patch_js_expand_goban_canvas(gopanda_js_path: Path) -> None:
+    if not gopanda_js_path.is_file():
+        raise ConfigurationError(f"Expected JS file was not found: {gopanda_js_path}")
+
+    js_text = gopanda_js_path.read_text(encoding="utf-8")
+    if (
+        GOPANDA_GOBAN_CANVAS_EXPANDED_CREATION_SNIPPET in js_text
+        and GOPANDA_GOBAN_CANVAS_EXPANDED_POSITION_SNIPPET in js_text
+    ):
+        return
+
+    patched = js_text.replace(
+        GOPANDA_GOBAN_CANVAS_CREATION_SNIPPET,
+        GOPANDA_GOBAN_CANVAS_EXPANDED_CREATION_SNIPPET,
+        1,
+    )
+    if patched == js_text:
+        raise ConfigurationError(f"Could not find goban canvas creation function in {gopanda_js_path}")
+
+    updated, count = GOPANDA_GOBAN_CANVAS_POSITION_PATTERN.subn(
+        GOPANDA_GOBAN_CANVAS_EXPANDED_POSITION_SNIPPET,
+        patched,
+        count=1,
+    )
+    if count != 1:
+        raise ConfigurationError(f"Could not find goban canvas positioning block in {gopanda_js_path}")
+
+    gopanda_js_path.write_text(updated, encoding="utf-8")
+
+
+def patch_js_translate_expanded_goban_context(gopanda_js_path: Path) -> None:
+    if not gopanda_js_path.is_file():
+        raise ConfigurationError(f"Expected JS file was not found: {gopanda_js_path}")
+
+    js_text = gopanda_js_path.read_text(encoding="utf-8")
+    if GOPANDA_Q0_CONTEXT_PATCHED_SNIPPET in js_text:
+        return
+
+    patched = js_text.replace(GOPANDA_Q0_CONTEXT_SNIPPET, GOPANDA_Q0_CONTEXT_PATCHED_SNIPPET, 1)
+    if patched == js_text:
+        raise ConfigurationError(f"Could not find q0 goban context function in {gopanda_js_path}")
+
+    gopanda_js_path.write_text(patched, encoding="utf-8")
+
+
 def patch_grid_color_override(site_css_path: Path, grid_filter) -> None:
     if not site_css_path.is_file():
         raise ConfigurationError(f"Expected CSS file was not found: {site_css_path}")
@@ -577,9 +662,23 @@ def build_runtime_stone_transform_script(
         "  var chosenShifts = {};\n"
         "  var markerStateKey = '__pandanetThemeReplacerPendingMarkerState';\n"
         "  var originalDrawImage = proto.drawImage;\n"
+        "  var originalClearRect = proto.clearRect;\n"
         "  var originalArc = proto.arc;\n"
         f"  var fuzzyStonePlacement = {format(fuzzy_stone_placement, 'g')};\n"
         "  var diagonalScale = Math.SQRT1_2 || (1 / Math.sqrt(2));\n"
+        "  window.__pandanetThemeReplacerInstallGobanContext = function(ctx, inset) {\n"
+        "    if (!ctx) return ctx;\n"
+        "    var targetInset = typeof inset === 'number' ? inset : 0;\n"
+        "    var currentInset = typeof ctx.__pandanetThemeReplacerGobanInset === 'number' ? ctx.__pandanetThemeReplacerGobanInset : 0;\n"
+        "    if (ctx.__pandanetThemeReplacerContextInstalled && Math.abs(currentInset - targetInset) < 0.01) return ctx;\n"
+        "    if (typeof ctx.translate === 'function') {\n"
+        "      ctx.translate(targetInset - currentInset, targetInset - currentInset);\n"
+        "    }\n"
+        "    ctx.__pandanetThemeReplacerGobanInset = targetInset;\n"
+        "    ctx.__pandanetThemeReplacerContextInstalled = true;\n"
+        "    if (ctx.canvas) ctx.canvas.__pandanetThemeReplacerGobanInset = targetInset;\n"
+        "    return ctx;\n"
+        "  };\n"
         "  function cljsEq(left, right) {\n"
         "    return typeof D !== 'undefined' && D && typeof D.l === 'function' ? D.l(left, right) : left === right;\n"
         "  }\n"
@@ -591,6 +690,29 @@ def build_runtime_stone_transform_script(
         "      if (Object.prototype.hasOwnProperty.call(configs, key) && src.indexOf(key) !== -1) return { key: key, config: configs[key] };\n"
         "    }\n"
         "    return null;\n"
+        "  }\n"
+        "  function isGobanCanvas(ctx) {\n"
+        "    var canvas = ctx && ctx.canvas;\n"
+        "    if (!canvas) return false;\n"
+        "    var className = typeof canvas.className === 'string' ? canvas.className : (canvas.className && canvas.className.baseVal) || '';\n"
+        "    var id = typeof canvas.id === 'string' ? canvas.id : '';\n"
+        "    return className.indexOf('goban-canvas') !== -1 || id.indexOf('goban-canvas') !== -1;\n"
+        "  }\n"
+        "  function getInstalledGobanInset(ctx) {\n"
+        "    if (!isGobanCanvas(ctx)) return 0;\n"
+        "    if (ctx && typeof ctx.__pandanetThemeReplacerGobanInset === 'number') return ctx.__pandanetThemeReplacerGobanInset;\n"
+        "    var canvas = ctx && ctx.canvas;\n"
+        "    if (canvas && typeof canvas.__pandanetThemeReplacerGobanInset === 'number') return canvas.__pandanetThemeReplacerGobanInset;\n"
+        "    return 0;\n"
+        "  }\n"
+        "  function isLikelyFullCanvasClear(ctx, x, y, w, h) {\n"
+        "    var canvas = ctx && ctx.canvas;\n"
+        "    if (!canvas) return false;\n"
+        "    var canvasWidth = canvas && typeof canvas.width === 'number' ? canvas.width : 0;\n"
+        "    var canvasHeight = canvas && typeof canvas.height === 'number' ? canvas.height : 0;\n"
+        "    if (!(canvasWidth > 0 && canvasHeight > 0)) return false;\n"
+        "    if (Math.abs(x) > 0.01 || Math.abs(y) > 0.01) return false;\n"
+        "    return w >= canvasWidth * 0.9 && h >= canvasHeight * 0.9;\n"
         "  }\n"
         "  function getVariantImage(configKey, dx, dy, dw, dh) {\n"
         "    var config = configs[configKey];\n"
@@ -704,11 +826,6 @@ def build_runtime_stone_transform_script(
         "      if (resolved) {\n"
         "        var config = resolved.config;\n"
         "        var imageToDraw = getVariantImage(resolved.key, dx, dy, dw, dh) || image;\n"
-        "        var shouldUseGeometryOverride = !(typeof this.globalAlpha === 'number' && this.globalAlpha < 0.999);\n"
-        "        if (!shouldUseGeometryOverride) {\n"
-        "          clearPendingMarkerState(this);\n"
-        "          return originalDrawImage.call(this, imageToDraw, dx, dy, dw, dh);\n"
-        "        }\n"
         "        var drawWidth = dw * config.width / 100;\n"
         "        var drawHeight = dh * config.height / 100;\n"
         "        var fuzzyOffset = getFuzzyOffset(getShiftForStone(this, dx, dy, dw, dh), drawWidth, drawHeight);\n"
@@ -727,6 +844,20 @@ def build_runtime_stone_transform_script(
         "    }\n"
         "    clearPendingMarkerState(this);\n"
         "    return originalDrawImage.apply(this, arguments);\n"
+        "  };\n"
+        "  proto.clearRect = function(x, y, w, h) {\n"
+        "    if (arguments.length === 4) {\n"
+        "      if (isLikelyFullCanvasClear(this, x, y, w, h)) {\n"
+        "        var canvas = this && this.canvas;\n"
+        "        this.save();\n"
+        "        if (typeof this.setTransform === 'function') this.setTransform(1, 0, 0, 1, 0, 0);\n"
+        "        var result = originalClearRect.call(this, 0, 0, canvas.width, canvas.height);\n"
+        "        this.restore();\n"
+        "        return result;\n"
+        "      }\n"
+        "      return originalClearRect.call(this, x, y, w, h);\n"
+        "    }\n"
+        "    return originalClearRect.apply(this, arguments);\n"
         "  };\n"
         "  proto.arc = function(x, y, r, startAngle, endAngle, counterclockwise) {\n"
         "    var state = this && this[markerStateKey];\n"

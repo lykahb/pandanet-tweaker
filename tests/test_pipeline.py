@@ -27,7 +27,9 @@ from pandanet_theme_replacer.pipeline import (
     patch_css_stone_transforms,
     patch_index_html_for_runtime_script,
     patch_js_asset_references,
+    patch_js_expand_goban_canvas,
     patch_js_force_full_board_redraw,
+    patch_js_translate_expanded_goban_context,
     write_runtime_stone_transform_script,
     replace_theme,
 )
@@ -410,6 +412,9 @@ class ReplacementPlanTests(unittest.TestCase):
             )
             js_path = root / "gopanda.js"
             js_path.write_text(
+                'function q0(a,b,c,d){var e=function(){var k=W(F(["goban-canvas",a]));return Z.j?Z.j(k):Z.call(null,k)}(),f=function(){var k=W(F(["grid-canvas",a]));return Z.j?Z.j(k):Z.call(null,k)}(),g=function(){var k=W(F(["shadow-canvas",a]));return Z.j?Z.j(k):Z.call(null,k)}();return jk([Xr,jx,Qia,yca,QA,R,Qx,voa,Uy,rH],[f.getContext("2d"),c,g,e,g.getContext("2d"),a,d,f,e.getContext("2d"),b])}'
+                'function K4(a,b){var c=J(b);b=t(c,lD);c=t(c,Cz);return new Sf(null,J4(a,"grid-canvas",c),new Sf(null,J4(a,"shadow-canvas",b),new Sf(null,J4(a,"goban-canvas",b),null,1,null),2,null),3,null)}'
+                'function N4(a,b){OT(function(){var n=W(F(["goban-canvas",a]));return Z.j?Z.j(n):Z.call(null,n)}(),new l(null,2,[Ky,ou.j(b),Qz,ou.j(b)],null),F(["px"]));}'
                 'function r0(a,b,c){var d=J(a);a=t(d,Uy);var e=t(d,rH);d=t(d,jx);var f=G(c,0,null);c=G(c,1,null);var g=new l(null,2,[SC,e0,WG,f0],null);b=b.j?b.j(g):b.call(null,g);a.drawImage(b,f*e,(d-c-1)*e,e,e)}'
                 'function V0(a,b){var c=J(a);a=t(c,Rw);c=t(c,lB);w0(a,b);return U0(a,c,b)}'
                 'function W0(a){}',
@@ -432,6 +437,8 @@ class ReplacementPlanTests(unittest.TestCase):
 
             patch_css_asset_references(css_path, refs)
             patch_js_asset_references(js_path, refs)
+            patch_js_expand_goban_canvas(js_path)
+            patch_js_translate_expanded_goban_context(js_path)
             patch_js_force_full_board_redraw(js_path)
             patch_css_stone_transforms(css_path, theme.stone_transforms)
             write_runtime_stone_transform_script(runtime_js_path, theme.stone_transforms, refs.js_refs, {}, 0.0)
@@ -449,6 +456,9 @@ class ReplacementPlanTests(unittest.TestCase):
         self.assertIn("background-position: -10.92% -8.92%;", css_text)
         self.assertIn("background-size: 184% 184%;", css_text)
         self.assertIn("background-position: -2% -2%;", css_text)
+        self.assertIn('J4(a,"goban-canvas",c)', js_text)
+        self.assertIn('new l(null,2,[Ky,0,Qz,0],null)', js_text)
+        self.assertIn('window.__pandanetThemeReplacerInstallGobanContext?window.__pandanetThemeReplacerInstallGobanContext(e.getContext("2d"),d):e.getContext("2d")', js_text)
         self.assertIn("function V0(a,b){return W0(a)}", js_text)
         self.assertIn("CanvasRenderingContext2D.prototype", runtime_js_text)
         self.assertIn('"img/custom/stone-black.png": { left: -10.92, top: -8.92, width: 116.84, height: 116.84, variants: [] }', runtime_js_text)
@@ -471,6 +481,59 @@ class ReplacementPlanTests(unittest.TestCase):
 
         self.assertIn("function V0(a,b){return W0(a)}", js_text)
         self.assertEqual(js_text.count("function V0(a,b){return W0(a)}"), 1)
+
+    def test_patch_js_expand_goban_canvas_replaces_inset_layout(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            js_path = Path(temp_dir) / "gopanda.js"
+            js_path.write_text(
+                'function K4(a,b){var c=J(b);b=t(c,lD);c=t(c,Cz);return new Sf(null,J4(a,"grid-canvas",c),new Sf(null,J4(a,"shadow-canvas",b),new Sf(null,J4(a,"goban-canvas",b),null,1,null),2,null),3,null)}'
+                'function N4(a,b){OT(function(){var n=W(F(["goban-canvas",a]));return Z.j?Z.j(n):Z.call(null,n)}(),new l(null,2,[Ky,ou.j(b),Qz,ou.j(b)],null),F(["px"]));'
+                'OT(function(){var n=W(F(["shadow-canvas",a]));return Z.j?Z.j(n):Z.call(null,n)}(),new l(null,2,[Ky,WC.j(b),Qz,WC.j(b)],null),F(["px"]));}',
+                encoding="utf-8",
+            )
+
+            patch_js_expand_goban_canvas(js_path)
+            patch_js_expand_goban_canvas(js_path)
+            js_text = js_path.read_text(encoding="utf-8")
+
+        self.assertIn('J4(a,"goban-canvas",c)', js_text)
+        self.assertEqual(js_text.count('J4(a,"goban-canvas",c)'), 1)
+        self.assertIn(
+            'OT(function(){var n=W(F(["goban-canvas",a]));return Z.j?Z.j(n):Z.call(null,n)}(),new l(null,2,[Ky,0,Qz,0],null),F(["px"]));',
+            js_text,
+        )
+
+    def test_patch_js_expand_goban_canvas_handles_wrapped_positioning_block(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            js_path = Path(temp_dir) / "gopanda.js"
+            js_path.write_text(
+                'function K4(a,b){var c=J(b);b=t(c,lD);c=t(c,Cz);return new Sf(null,J4(a,"grid-canvas",c),new Sf(null,J4(a,"shadow-canvas",b),new Sf(null,J4(a,"goban-canvas",b),null,1,null),2,null),3,null)}'
+                'function N4(a,b){OT(function(){var n=\nW(F(["goban-canvas",a]));return Z.j?Z.j(n):Z.call(null,n)}(),new l(null,2,[Ky,ou.j(b),Qz,ou.j(b)],null),F(["px"]));}',
+                encoding="utf-8",
+            )
+
+            patch_js_expand_goban_canvas(js_path)
+            js_text = js_path.read_text(encoding="utf-8")
+
+        self.assertIn('J4(a,"goban-canvas",c)', js_text)
+        self.assertIn('new l(null,2,[Ky,0,Qz,0],null)', js_text)
+
+    def test_patch_js_translate_expanded_goban_context_wraps_q0_goban_context(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            js_path = Path(temp_dir) / "gopanda.js"
+            js_path.write_text(
+                'function q0(a,b,c,d){var e=function(){var k=W(F(["goban-canvas",a]));return Z.j?Z.j(k):Z.call(null,k)}(),f=function(){var k=W(F(["grid-canvas",a]));return Z.j?Z.j(k):Z.call(null,k)}(),g=function(){var k=W(F(["shadow-canvas",a]));return Z.j?Z.j(k):Z.call(null,k)}();return jk([Xr,jx,Qia,yca,QA,R,Qx,voa,Uy,rH],[f.getContext("2d"),c,g,e,g.getContext("2d"),a,d,f,e.getContext("2d"),b])}',
+                encoding="utf-8",
+            )
+
+            patch_js_translate_expanded_goban_context(js_path)
+            patch_js_translate_expanded_goban_context(js_path)
+            js_text = js_path.read_text(encoding="utf-8")
+
+        self.assertIn(
+            'window.__pandanetThemeReplacerInstallGobanContext?window.__pandanetThemeReplacerInstallGobanContext(e.getContext("2d"),d):e.getContext("2d")',
+            js_text,
+        )
 
     def test_patch_index_html_for_runtime_script_is_idempotent(self) -> None:
         with TemporaryDirectory() as temp_dir:
@@ -561,10 +624,20 @@ class ReplacementPlanTests(unittest.TestCase):
         self.assertIn("chosenShifts[key] = randomInt(8);", script)
         self.assertIn("var diagonalScale = Math.SQRT1_2 || (1 / Math.sqrt(2));", script)
         self.assertIn("drawWidth * fuzzyStonePlacement", script)
+        self.assertIn("window.__pandanetThemeReplacerInstallGobanContext = function(ctx, inset)", script)
+        self.assertIn("function isGobanCanvas(ctx)", script)
+        self.assertIn("function getInstalledGobanInset(ctx)", script)
+        self.assertIn("function isLikelyFullCanvasClear(ctx, x, y, w, h)", script)
+        self.assertIn("var originalClearRect = proto.clearRect;", script)
         self.assertIn("var originalArc = proto.arc;", script)
-        self.assertIn("var shouldUseGeometryOverride = !(typeof this.globalAlpha === 'number' && this.globalAlpha < 0.999);", script)
-        self.assertIn("if (!shouldUseGeometryOverride) {", script)
+        self.assertIn("var finalDx = dx + (dw * config.left / 100) + fuzzyOffset.x;", script)
+        self.assertIn("var finalDy = dy + (dh * config.top / 100) + fuzzyOffset.y;", script)
         self.assertIn("setPendingMarkerState(this, dx + dw / 2, dy + dh / 2, finalDx + drawWidth / 2, finalDy + drawHeight / 2, Math.min(dw, dh));", script)
+        self.assertIn("proto.clearRect = function(x, y, w, h)", script)
+        self.assertIn("if (isLikelyFullCanvasClear(this, x, y, w, h)) {", script)
+        self.assertIn("if (typeof this.setTransform === 'function') this.setTransform(1, 0, 0, 1, 0, 0);", script)
+        self.assertIn("var result = originalClearRect.call(this, 0, 0, canvas.width, canvas.height);", script)
+        self.assertIn("return originalClearRect.call(this, x, y, w, h);", script)
         self.assertIn("proto.arc = function(x, y, r, startAngle, endAngle, counterclockwise)", script)
         self.assertIn("if (isLikelyMarkerArc(this, state, x, y, r)) {", script)
 

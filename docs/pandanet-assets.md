@@ -97,6 +97,8 @@ For stone scaling and offset, the tool currently supports a narrow subset of Sab
 
 When those are present with percentage values, the tool keeps the original stone asset, scales the imported values down to compensate for Shudan's default `calc(100% - .08em)` stone inset, patches CSS background sizing/positioning for non-canvas stone uses, and injects a small runtime script into the app so Electron adjusts canvas `drawImage()` calls for the custom stone files. This avoids rasterization and avoids fragile surgery inside Pandanet's minified JS bundle.
 
+The stock client uses a smaller inset `goban-canvas` for stone rendering while `grid-canvas` spans the full board bounds. That is fine for Pandanet's stock `50x50` stones, but it clips enlarged or shifted stones on the first and last lines. When runtime stone geometry overrides are active, the tool patches `gopanda.js` so `goban-canvas` uses the same outer bounds as `grid-canvas`, then the injected runtime hook adds Pandanet's original inset back into the transformed stone draw positions. That keeps stones aligned with the grid while freeing the outer margin for themed stones.
+
 For fuzzy placement and last-move marker alignment, the runtime script uses two separate seams:
 
 - it wraps `CanvasRenderingContext2D.prototype.drawImage` for the custom goban stone assets and records the final shifted stone center that was actually rendered
