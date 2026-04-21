@@ -104,6 +104,8 @@ For fuzzy placement and last-move marker alignment, the runtime script uses two 
 
 That `arc()` hook is used instead of trying to override Pandanet's internal `v0(...)` marker function. In the extracted client, `v0(...)` is a local compiled binding rather than `window.v0`, so replacing `window.v0` has no effect on the actual marker path.
 
+Review mode redraws are handled differently from observation hover previews. In the extracted client, review updates normally go through `V0(...)`, which clears and redraws only one cell, while full-board redraw uses `W0(...)`. When runtime stone geometry overrides are active, the tool patches `V0(...)` to call `W0(...)` instead. That avoids persistent repaint artifacts from enlarged or shifted stones extending beyond their original cell rectangle.
+
 ## Open Questions
 
 - How should Sabaki stone assets be transformed into Pandanet's `-w-shadow` and `variation-*` derivatives?

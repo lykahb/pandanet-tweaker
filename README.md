@@ -148,6 +148,7 @@ To avoid ambiguity:
 - Sabaki imports are normalized to match Shudan's smaller default stone footprint. Shudan effectively draws stones at about `92%` of the point size, while Pandanet uses the full point size, so imported Sabaki stone transforms are scaled down before they are applied in Pandanet.
 - When a Sabaki theme defines per-stone `width`, `height`, `top`, and `left` on `.shudan-stone-image.shudan-sign_1` or `.shudan-stone-image.shudan-sign_-1`, the tool normalizes those percentage values in Python, patches related CSS background sizing/positioning, and injects a small runtime script that applies the same numeric transform to canvas `drawImage()` calls for the custom stone files.
 - When Sabaki random stone variants are present, the runtime script chooses a stable random variant per board stone draw location so the stones do not flicker on redraw.
+- When runtime stone geometry overrides are active, the tool also patches Pandanet's review-mode incremental redraw helper so it falls back to Pandanet's own full-board redraw. That avoids cell-by-cell repaint artifacts when stones are larger or shifted outside their original cell box.
 - `--board-background-mode` only changes how `.goban` renders the board asset: `repeat` or scaled-to-fit.
 - `--grid-rgba` appends a goban-scoped CSS override for `.goban > .grid-canvas`.
 - `--fuzzy-stone-placement` adds Shudan-style jitter to board stones. The value is a fraction of the drawn stone diameter, from `0` to `0.5`.

@@ -58,6 +58,8 @@ INDEX_HTML_RUNTIME_SCRIPT_PATTERN = re.compile(
 INDEX_HTML_GOPANDA_SCRIPT_PATTERN = re.compile(
     r'(?P<tag><script src="js/gopanda\.js" type="text/javascript"></script>)'
 )
+GOPANDA_INCREMENTAL_REDRAW_SNIPPET = "function V0(a,b){var c=J(a);a=t(c,Rw);c=t(c,lB);w0(a,b);return U0(a,c,b)}"
+GOPANDA_FULL_REDRAW_SNIPPET = "function V0(a,b){return W0(a)}"
 
 
 def inspect_theme(theme_path: Path, theme_format: str = "auto") -> ImportedTheme:
@@ -112,6 +114,10 @@ def build_replacement_plan(
     if theme.stone_transforms or theme.stone_variants or fuzzy_stone_placement > 0:
         post_actions.append(
             f"Inject {PANDANET_THEME_RUNTIME_JS_PATH} and patch {PANDANET_INDEX_HTML_PATH} to apply stone rendering overrides at runtime."
+        )
+    if theme.stone_transforms or fuzzy_stone_placement > 0:
+        post_actions.append(
+            f"Patch {PANDANET_GOPANDA_JS_PATH} so review-mode cell redraws use full-board redraw instead."
         )
     if fuzzy_stone_placement > 0:
         post_actions.append(
@@ -243,6 +249,8 @@ def _apply_replacement_plan(
 
     patch_css_asset_references(extracted_dir / PANDANET_SITE_CSS_PATH, asset_refs)
     patch_js_asset_references(extracted_dir / PANDANET_GOPANDA_JS_PATH, asset_refs)
+    if plan.theme.stone_transforms or fuzzy_stone_placement > 0:
+        patch_js_force_full_board_redraw(extracted_dir / PANDANET_GOPANDA_JS_PATH)
     patch_shadow_canvas_override(
         extracted_dir / PANDANET_SITE_CSS_PATH,
         disable_default_shadows=disable_default_shadows,
@@ -446,6 +454,21 @@ def patch_js_asset_references(
         js_text = js_text.replace(stock_ref, asset_refs.js_ref_for(role))
 
     gopanda_js_path.write_text(js_text, encoding="utf-8")
+
+
+def patch_js_force_full_board_redraw(gopanda_js_path: Path) -> None:
+    if not gopanda_js_path.is_file():
+        raise ConfigurationError(f"Expected JS file was not found: {gopanda_js_path}")
+
+    js_text = gopanda_js_path.read_text(encoding="utf-8")
+    if GOPANDA_FULL_REDRAW_SNIPPET in js_text:
+        return
+
+    patched = js_text.replace(GOPANDA_INCREMENTAL_REDRAW_SNIPPET, GOPANDA_FULL_REDRAW_SNIPPET, 1)
+    if patched == js_text:
+        raise ConfigurationError(f"Could not find V0 incremental redraw function in {gopanda_js_path}")
+
+    gopanda_js_path.write_text(patched, encoding="utf-8")
 
 
 def patch_grid_color_override(site_css_path: Path, grid_filter) -> None:
@@ -681,6 +704,11 @@ def build_runtime_stone_transform_script(
         "      if (resolved) {\n"
         "        var config = resolved.config;\n"
         "        var imageToDraw = getVariantImage(resolved.key, dx, dy, dw, dh) || image;\n"
+        "        var shouldUseGeometryOverride = !(typeof this.globalAlpha === 'number' && this.globalAlpha < 0.999);\n"
+        "        if (!shouldUseGeometryOverride) {\n"
+        "          clearPendingMarkerState(this);\n"
+        "          return originalDrawImage.call(this, imageToDraw, dx, dy, dw, dh);\n"
+        "        }\n"
         "        var drawWidth = dw * config.width / 100;\n"
         "        var drawHeight = dh * config.height / 100;\n"
         "        var fuzzyOffset = getFuzzyOffset(getShiftForStone(this, dx, dy, dw, dh), drawWidth, drawHeight);\n"

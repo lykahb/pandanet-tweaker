@@ -27,6 +27,7 @@ from pandanet_theme_replacer.pipeline import (
     patch_css_stone_transforms,
     patch_index_html_for_runtime_script,
     patch_js_asset_references,
+    patch_js_force_full_board_redraw,
     write_runtime_stone_transform_script,
     replace_theme,
 )
@@ -409,7 +410,9 @@ class ReplacementPlanTests(unittest.TestCase):
             )
             js_path = root / "gopanda.js"
             js_path.write_text(
-                'function r0(a,b,c){var d=J(a);a=t(d,Uy);var e=t(d,rH);d=t(d,jx);var f=G(c,0,null);c=G(c,1,null);var g=new l(null,2,[SC,e0,WG,f0],null);b=b.j?b.j(g):b.call(null,g);a.drawImage(b,f*e,(d-c-1)*e,e,e)}',
+                'function r0(a,b,c){var d=J(a);a=t(d,Uy);var e=t(d,rH);d=t(d,jx);var f=G(c,0,null);c=G(c,1,null);var g=new l(null,2,[SC,e0,WG,f0],null);b=b.j?b.j(g):b.call(null,g);a.drawImage(b,f*e,(d-c-1)*e,e,e)}'
+                'function V0(a,b){var c=J(a);a=t(c,Rw);c=t(c,lB);w0(a,b);return U0(a,c,b)}'
+                'function W0(a){}',
                 encoding="utf-8",
             )
             index_html_path = root / "index.html"
@@ -429,6 +432,7 @@ class ReplacementPlanTests(unittest.TestCase):
 
             patch_css_asset_references(css_path, refs)
             patch_js_asset_references(js_path, refs)
+            patch_js_force_full_board_redraw(js_path)
             patch_css_stone_transforms(css_path, theme.stone_transforms)
             write_runtime_stone_transform_script(runtime_js_path, theme.stone_transforms, refs.js_refs, {}, 0.0)
             patch_index_html_for_runtime_script(index_html_path)
@@ -445,13 +449,28 @@ class ReplacementPlanTests(unittest.TestCase):
         self.assertIn("background-position: -10.92% -8.92%;", css_text)
         self.assertIn("background-size: 184% 184%;", css_text)
         self.assertIn("background-position: -2% -2%;", css_text)
-        self.assertIn('a.drawImage(b,f*e,(d-c-1)*e,e,e)', js_text)
+        self.assertIn("function V0(a,b){return W0(a)}", js_text)
         self.assertIn("CanvasRenderingContext2D.prototype", runtime_js_text)
         self.assertIn('"img/custom/stone-black.png": { left: -10.92, top: -8.92, width: 116.84, height: 116.84, variants: [] }', runtime_js_text)
         self.assertIn('"img/custom/stone-white.png": { left: -2, top: -2, width: 184, height: 184, variants: [] }', runtime_js_text)
         self.assertIn("arguments.length === 5", runtime_js_text)
         self.assertIn("src.indexOf(key) !== -1", runtime_js_text)
         self.assertIn('src="js/pandanet-theme-replacer.js"', index_html_text)
+
+    def test_patch_js_force_full_board_redraw_replaces_incremental_redraw(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            js_path = Path(temp_dir) / "gopanda.js"
+            js_path.write_text(
+                "function w0(a,b){}function U0(a,b,c){}function V0(a,b){var c=J(a);a=t(c,Rw);c=t(c,lB);w0(a,b);return U0(a,c,b)}function W0(a){}",
+                encoding="utf-8",
+            )
+
+            patch_js_force_full_board_redraw(js_path)
+            patch_js_force_full_board_redraw(js_path)
+            js_text = js_path.read_text(encoding="utf-8")
+
+        self.assertIn("function V0(a,b){return W0(a)}", js_text)
+        self.assertEqual(js_text.count("function V0(a,b){return W0(a)}"), 1)
 
     def test_patch_index_html_for_runtime_script_is_idempotent(self) -> None:
         with TemporaryDirectory() as temp_dir:
@@ -543,6 +562,8 @@ class ReplacementPlanTests(unittest.TestCase):
         self.assertIn("var diagonalScale = Math.SQRT1_2 || (1 / Math.sqrt(2));", script)
         self.assertIn("drawWidth * fuzzyStonePlacement", script)
         self.assertIn("var originalArc = proto.arc;", script)
+        self.assertIn("var shouldUseGeometryOverride = !(typeof this.globalAlpha === 'number' && this.globalAlpha < 0.999);", script)
+        self.assertIn("if (!shouldUseGeometryOverride) {", script)
         self.assertIn("setPendingMarkerState(this, dx + dw / 2, dy + dh / 2, finalDx + drawWidth / 2, finalDy + drawHeight / 2, Math.min(dw, dh));", script)
         self.assertIn("proto.arc = function(x, y, r, startAngle, endAngle, counterclockwise)", script)
         self.assertIn("if (isLikelyMarkerArc(this, state, x, y, r)) {", script)
