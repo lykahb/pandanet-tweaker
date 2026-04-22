@@ -36,6 +36,12 @@ The project is built with Python and `uv`, but the product goal is simple: make 
 
 Current implementation status lives in [docs/plan.md](/Users/borys/projects/pandanet-tweaker/docs/plan.md:1). Lower-level asset and rendering notes live in [docs/pandanet-assets.md](/Users/borys/projects/pandanet-tweaker/docs/pandanet-assets.md:1).
 
+## Screenshot
+
+![Pandanet Tweaker screenshot with the BadukTV theme](docs/images/pandanet-baduktv.jpg)
+
+*BadukTV theme, fuzzy stone placement. Generated with `uv run pandanet-tweaker replace --fuzzy-stone-placement 0.04 --stone-scale=0.97 ~/Downloads/Upsided-Sabaki-Themes-main/baduktv`.*
+
 ## CLI
 
 Inspect a theme:
