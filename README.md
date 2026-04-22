@@ -6,6 +6,85 @@ It is built for people who want Pandanet to look more like the Go software they 
 
 The tool aims to support the most recent Pandanet desktop client version first. When the client changes, compatibility updates should target the newest release before older builds.
 
+The project is built with Python and `uv`, but the product goal is simple: make Pandanet theming practical, repeatable, and reversible without turning the tool into a general-purpose app patcher.
+
+Current implementation status lives in [docs/plan.md](/Users/borys/projects/pandanet-tweaker/docs/plan.md:1). Lower-level asset and rendering notes live in [docs/pandanet-assets.md](/Users/borys/projects/pandanet-tweaker/docs/pandanet-assets.md:1).
+
+![Pandanet Tweaker screenshot with the BadukTV theme](docs/images/pandanet-baduktv.jpg)
+
+*BadukTV theme, fuzzy stone placement. Generated with `uv run pandanet-tweaker replace --fuzzy-stone-placement 0.04 --stone-scale=0.97 ~/Downloads/Upsided-Sabaki-Themes-main/baduktv`.*
+
+
+## Installation
+
+If you are not used to Python tools, the setup is still straightforward. Install `uv`, download this project, open a terminal in the project folder, and run `uv sync` once.
+
+You do not need to install Python separately first. `uv` can install the Python version the project needs automatically.
+
+### 1. Install `uv`
+
+On macOS or Linux:
+
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+On Windows PowerShell:
+
+```powershell
+powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+```
+
+After installation, open a new terminal window and check that `uv` works:
+
+```bash
+uv
+```
+
+If you prefer, `uv` is also available through package managers such as Homebrew on macOS and WinGet on Windows.
+
+### 2. Download This Project
+
+Download the project from GitHub as a ZIP file, then extract it somewhere easy to find, such as your Desktop or Downloads folder.
+
+### 3. Open A Terminal In The Project Folder
+
+Change into the project directory. For example:
+
+```bash
+cd ~/Downloads/pandanet-tweaker
+```
+
+### 4. Install The Project Dependencies
+
+Run:
+
+```bash
+uv sync
+```
+
+This creates the local environment the tool uses and installs the required packages.
+
+### 5. Run The Tool
+
+Check that the command is available:
+
+```bash
+uv run pandanet-tweaker --help
+```
+
+The usual way to use the tool is `replace`.
+
+For a first real run, use a Sabaki theme:
+
+```bash
+uv run pandanet-tweaker replace /path/to/theme
+```
+
+More common usage patterns are listed below.
+
+## Usage
+
 On macOS, the installed Pandanet bundle lives at:
 
 `/Applications/GoPanda2.app/Contents/Resources/app.asar`
@@ -16,65 +95,32 @@ For repeatable theming on macOS, keep the clean upstream archive alongside it as
 
 `/Applications/GoPanda2.app/Contents/Resources/original-app.asar`
 
-The project is built with Python and `uv`, but the product goal is simple: make Pandanet theming practical, repeatable, and reversible without turning the tool into a general-purpose app patcher.
+Most people will use `replace`.
 
-## Scope
-
-- Accept direct file inputs for:
-  - background
-  - black stone
-  - white stone
-- Optionally import a theme package, starting with Sabaki-compatible themes.
-- Normalize those inputs into a small internal manifest with semantic roles:
-  - `board`
-  - `stone-black`
-  - `stone-white`
-- Copy those assets into the patched archive and redirect Pandanet's CSS/JS references to them.
-- Patch the client CSS so the goban board texture can either repeat or scale.
-- Optionally tint the goban grid canvas with a CSS filter derived from a target RGBA color.
-- Rebuild a new `.asar` directly from the source archive while overwriting only the files the tool changes.
-
-Current implementation status lives in [docs/plan.md](/Users/borys/projects/pandanet-tweaker/docs/plan.md:1). Lower-level asset and rendering notes live in [docs/pandanet-assets.md](/Users/borys/projects/pandanet-tweaker/docs/pandanet-assets.md:1).
-
-## Screenshot
-
-![Pandanet Tweaker screenshot with the BadukTV theme](docs/images/pandanet-baduktv.jpg)
-
-*BadukTV theme, fuzzy stone placement. Generated with `uv run pandanet-tweaker replace --fuzzy-stone-placement 0.04 --stone-scale=0.97 ~/Downloads/Upsided-Sabaki-Themes-main/baduktv`.*
-
-## CLI
-
-Inspect a theme:
+Use a Sabaki theme:
 
 ```bash
-uv run pandanet-tweaker inspect-theme /path/to/theme
+uv run pandanet-tweaker replace /path/to/theme
 ```
 
-Build a dry-run plan from direct asset files:
+Use plain image files:
 
 ```bash
 uv run pandanet-tweaker replace \
   --board-background /path/to/board.svg \
-  --board-background-mode scale \
   --black-stone /path/to/black.svg \
-  --white-stone /path/to/white.svg \
-  --stone-scale 1.1 \
-  --grid-rgba '#c58a3ccc' \
-  --fuzzy-stone-placement 0.08 \
-  --disable-default-shadows \
-  --dry-run
+  --white-stone /path/to/white.svg
 ```
 
-Use a Sabaki theme, but override just one asset:
+Use a Sabaki theme, but override one asset:
 
 ```bash
 uv run pandanet-tweaker replace /path/to/theme \
   --board-background /path/to/custom-board.svg \
-  --board-background-mode repeat \
-  --dry-run
+  --board-background-mode repeat
 ```
 
-Repack to a new output file:
+Write the patched result to a specific output file:
 
 ```bash
 uv run pandanet-tweaker replace \
@@ -83,6 +129,18 @@ uv run pandanet-tweaker replace \
   --black-stone /path/to/black.svg \
   --white-stone /path/to/white.svg \
   --output ./build/app.asar
+```
+
+Preview the plan without writing a new archive yet:
+
+```bash
+uv run pandanet-tweaker replace /path/to/theme --dry-run
+```
+
+Advanced: inspect a theme without building a replacement:
+
+```bash
+uv run pandanet-tweaker inspect-theme /path/to/theme
 ```
 
 When `--asar` is omitted, the tool looks for `/Applications/GoPanda2.app/Contents/Resources/original-app.asar` first and falls back to `app.asar`. On Linux, pass `--asar` explicitly to the `app.asar` inside the extracted AppImage tree.
