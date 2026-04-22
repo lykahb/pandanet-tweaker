@@ -125,6 +125,7 @@ class ReplaceRequest:
     output_path: Path
     background_mode: BackgroundMode | None = None
     grid_rgba: str | None = None
+    stone_scale: float = 1.0
     fuzzy_stone_placement: float = 0.0
     disable_default_shadows: bool = True
     dry_run: bool = False

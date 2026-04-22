@@ -642,6 +642,25 @@ class ReplacementPlanTests(unittest.TestCase):
         self.assertIn('"img/custom/stone-black.svg": { left: -10.92, top: -8.92, width: 116.84, height: 116.84, variants: [] }', script)
         self.assertIn("proto.__pandanetThemeReplacerDrawImagePatched = true;", script)
 
+    def test_build_runtime_stone_transform_script_uses_scaled_transforms(self) -> None:
+        script = build_runtime_stone_transform_script(
+            {
+                AssetRole.STONE_BLACK: StoneTransform(
+                    width="120%",
+                    height="120%",
+                    top="-10%",
+                    left="-10%",
+                ),
+            },
+            {
+                AssetRole.STONE_BLACK: "img/custom/stone-black.png",
+            },
+            {},
+            0.0,
+        )
+
+        self.assertIn('"img/custom/stone-black.png": { left: -10, top: -10, width: 120, height: 120, variants: [] }', script)
+
     def test_build_runtime_stone_transform_script_includes_random_variants(self) -> None:
         script = build_runtime_stone_transform_script(
             {
@@ -738,6 +757,64 @@ class ReplacementPlanTests(unittest.TestCase):
             "Apply Shudan-style fuzzy stone placement with maximum offset 0.25 stone diameters.",
             plan.post_actions,
         )
+
+    def test_replace_dry_run_reports_stone_scale_post_action(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            board = root / "board.jpg"
+            black = root / "black.png"
+            white = root / "white.png"
+            board.write_bytes(JPEG_1X1)
+            black.write_bytes(PNG_1X1)
+            white.write_bytes(PNG_1X1)
+
+            plan = replace_theme(
+                ReplaceRequest(
+                    input_spec=self._make_input_spec(
+                        board_background_path=board,
+                        black_stone_path=black,
+                        white_stone_path=white,
+                    ),
+                    asar_path=root / "app.asar",
+                    output_path=root / "out.asar",
+                    stone_scale=1.25,
+                    dry_run=True,
+                )
+            )
+
+        self.assertIn(
+            "Inject app/js/pandanet-theme-replacer.js and patch app/index.html to apply stone rendering overrides at runtime.",
+            plan.post_actions,
+        )
+        self.assertIn(
+            "Scale all stones by 1.25x around their center.",
+            plan.post_actions,
+        )
+
+    def test_replace_rejects_out_of_range_stone_scale(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            board = root / "board.jpg"
+            black = root / "black.png"
+            white = root / "white.png"
+            board.write_bytes(JPEG_1X1)
+            black.write_bytes(PNG_1X1)
+            white.write_bytes(PNG_1X1)
+
+            with self.assertRaisesRegex(ConfigurationError, "must be between 0.1 and 5"):
+                replace_theme(
+                    ReplaceRequest(
+                        input_spec=self._make_input_spec(
+                            board_background_path=board,
+                            black_stone_path=black,
+                            white_stone_path=white,
+                        ),
+                        asar_path=root / "app.asar",
+                        output_path=root / "out.asar",
+                        stone_scale=0.05,
+                        dry_run=True,
+                    )
+                )
 
     def test_replace_rejects_out_of_range_fuzzy_stone_placement(self) -> None:
         with TemporaryDirectory() as temp_dir:

@@ -77,6 +77,15 @@ def build_parser() -> argparse.ArgumentParser:
         help="Tint the goban grid canvas with a hex RGBA color, for example #c58a3cff.",
     )
     replace_parser.add_argument(
+        "--stone-scale",
+        type=float,
+        default=1.0,
+        help=(
+            "Scale the final stone geometry by a floating-point multiplier between 0.1 and 5. "
+            "The value 1 keeps the default size."
+        ),
+    )
+    replace_parser.add_argument(
         "--fuzzy-stone-placement",
         type=float,
         default=0.0,
@@ -132,6 +141,7 @@ def main(argv: list[str] | None = None) -> int:
                 output_path=args.output,
                 background_mode=background_mode,
                 grid_rgba=args.grid_rgba,
+                stone_scale=args.stone_scale,
                 fuzzy_stone_placement=args.fuzzy_stone_placement,
                 disable_default_shadows=args.disable_default_shadows,
                 dry_run=args.dry_run,

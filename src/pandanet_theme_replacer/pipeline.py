@@ -104,6 +104,7 @@ def build_replacement_plan(
     *,
     background_mode: BackgroundMode | None = None,
     grid_rgba: str | None = None,
+    stone_scale: float = 1.0,
     fuzzy_stone_placement: float = 0.0,
     disable_default_shadows: bool = True,
 ) -> ReplacementPlan:
@@ -143,11 +144,11 @@ def build_replacement_plan(
         post_actions.append(
             f"Patch {PANDANET_SITE_CSS_PATH} to hide {PANDANET_GOBAN_SHADOW_SELECTOR}."
         )
-    if theme.stone_transforms or theme.stone_variants or fuzzy_stone_placement > 0:
+    if theme.stone_transforms or theme.stone_variants or stone_scale != 1.0 or fuzzy_stone_placement > 0:
         post_actions.append(
             f"Inject {PANDANET_THEME_RUNTIME_JS_PATH} and patch {PANDANET_INDEX_HTML_PATH} to apply stone rendering overrides at runtime."
         )
-    if theme.stone_transforms or fuzzy_stone_placement > 0:
+    if theme.stone_transforms or stone_scale != 1.0 or fuzzy_stone_placement > 0:
         post_actions.append(
             f"Patch {PANDANET_GOPANDA_JS_PATH} so goban-canvas uses the full board bounds instead of the inset inner bounds."
         )
@@ -161,6 +162,8 @@ def build_replacement_plan(
         post_actions.append(
             f"Apply Shudan-style fuzzy stone placement with maximum offset {fuzzy_stone_placement:g} stone diameters."
         )
+    if stone_scale != 1.0:
+        post_actions.append(f"Scale all stones by {stone_scale:g}x around their center.")
     if grid_rgba is not None:
         post_actions.append(f"Patch {PANDANET_SITE_CSS_PATH} to tint {PANDANET_GOBAN_GRID_SELECTOR} with {grid_rgba}.")
 
@@ -170,6 +173,8 @@ def build_replacement_plan(
 def replace_theme(request: ReplaceRequest) -> ReplacementPlan:
     theme = load_input_theme(request.input_spec)
     grid_filter = None
+    if not 0.1 <= request.stone_scale <= 5:
+        raise ConfigurationError("Invalid --stone-scale value: must be between 0.1 and 5.")
     if not 0 <= request.fuzzy_stone_placement <= 0.5:
         raise ConfigurationError("Invalid --fuzzy-stone-placement value: must be between 0 and 0.5.")
     if request.grid_rgba is not None:
@@ -182,6 +187,7 @@ def replace_theme(request: ReplaceRequest) -> ReplacementPlan:
         theme,
         background_mode=request.background_mode,
         grid_rgba=request.grid_rgba,
+        stone_scale=request.stone_scale,
         fuzzy_stone_placement=request.fuzzy_stone_placement,
         disable_default_shadows=request.disable_default_shadows,
     )
@@ -207,6 +213,7 @@ def replace_theme(request: ReplaceRequest) -> ReplacementPlan:
         plan,
         background_mode=request.background_mode,
         grid_filter=grid_filter,
+        stone_scale=request.stone_scale,
         fuzzy_stone_placement=request.fuzzy_stone_placement,
         disable_default_shadows=request.disable_default_shadows,
         output_path=output_path,
@@ -249,13 +256,15 @@ def _apply_replacement_plan_direct(
     *,
     background_mode: BackgroundMode | None,
     grid_filter,
+    stone_scale: float,
     fuzzy_stone_placement: float,
     disable_default_shadows: bool,
     output_path: Path,
 ) -> None:
     asset_refs = build_asset_reference_map(plan.theme)
     stone_variant_refs = build_stone_variant_reference_map(plan.theme)
-    needs_runtime = bool(plan.theme.stone_transforms or stone_variant_refs or fuzzy_stone_placement > 0)
+    effective_stone_transforms = build_effective_stone_transforms(plan.theme.stone_transforms, stone_scale)
+    needs_runtime = bool(effective_stone_transforms or stone_variant_refs or fuzzy_stone_placement > 0)
 
     replacements: dict[Path, bytes] = {}
     for operation in plan.operations:
@@ -274,7 +283,7 @@ def _apply_replacement_plan_direct(
 
         patch_css_asset_references(site_css_path, asset_refs)
         patch_js_asset_references(gopanda_js_path, asset_refs)
-        if plan.theme.stone_transforms or fuzzy_stone_placement > 0:
+        if effective_stone_transforms or fuzzy_stone_placement > 0:
             patch_js_expand_goban_canvas(gopanda_js_path)
             patch_js_translate_expanded_goban_context(gopanda_js_path)
             patch_js_force_full_board_redraw(gopanda_js_path)
@@ -282,12 +291,12 @@ def _apply_replacement_plan_direct(
             site_css_path,
             disable_default_shadows=disable_default_shadows,
         )
-        patch_css_stone_transforms(site_css_path, plan.theme.stone_transforms)
+        patch_css_stone_transforms(site_css_path, effective_stone_transforms)
         if needs_runtime:
             runtime_js_path = temp_root / PANDANET_THEME_RUNTIME_JS_PATH
             write_runtime_stone_transform_script(
                 runtime_js_path,
-                plan.theme.stone_transforms,
+                effective_stone_transforms,
                 asset_refs.js_refs,
                 stone_variant_refs,
                 fuzzy_stone_placement,
@@ -883,9 +892,47 @@ def _runtime_transform_for_role(
     return stone_transforms.get(role, StoneTransform(width="100%", height="100%", top="0%", left="0%"))
 
 
+def build_effective_stone_transforms(
+    stone_transforms: dict[AssetRole, StoneTransform],
+    stone_scale: float,
+) -> dict[AssetRole, StoneTransform]:
+    effective: dict[AssetRole, StoneTransform] = {}
+    for role in (AssetRole.STONE_BLACK, AssetRole.STONE_WHITE):
+        transform = stone_transforms.get(role)
+        if transform is None and stone_scale == 1.0:
+            continue
+        base_transform = transform or StoneTransform(width="100%", height="100%", top="0%", left="0%")
+        effective[role] = scale_stone_transform(base_transform, stone_scale)
+    return effective
+
+
+def scale_stone_transform(transform: StoneTransform, stone_scale: float) -> StoneTransform:
+    if stone_scale == 1.0:
+        return transform
+
+    width = _percent_value(transform.width)
+    height = _percent_value(transform.height)
+    left = _percent_value(transform.left)
+    top = _percent_value(transform.top)
+    new_width = width * stone_scale
+    new_height = height * stone_scale
+    left -= (new_width - width) / 2
+    top -= (new_height - height) / 2
+    return StoneTransform(
+        width=f"{format(new_width, 'g')}%",
+        height=f"{format(new_height, 'g')}%",
+        top=f"{format(top, 'g')}%",
+        left=f"{format(left, 'g')}%",
+    )
+
+
 def _js_string_literal(value: str) -> str:
     return '"' + value.replace("\\", "\\\\").replace('"', '\\"') + '"'
 
 
 def _percent_number(value: str) -> str:
     return format(float(value.removesuffix("%")), "g")
+
+
+def _percent_value(value: str) -> float:
+    return float(value.removesuffix("%"))

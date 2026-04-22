@@ -65,6 +65,7 @@ uv run pandanet-theme-replacer replace \
   --board-background-mode scale \
   --black-stone /path/to/black.svg \
   --white-stone /path/to/white.svg \
+  --stone-scale 1.1 \
   --grid-rgba '#c58a3ccc' \
   --fuzzy-stone-placement 0.08 \
   --disable-default-shadows \
@@ -145,6 +146,7 @@ To avoid ambiguity:
 - When runtime stone geometry overrides are active, the tool also patches Pandanet's review-mode incremental redraw helper so it falls back to Pandanet's own full-board redraw. That avoids cell-by-cell repaint artifacts when stones are larger or shifted outside their original cell box.
 - `--board-background-mode` only changes how `.goban` renders the board asset: `repeat` or scaled-to-fit.
 - `--grid-rgba` appends a goban-scoped CSS override for `.goban > .grid-canvas`.
+- `--stone-scale` scales the final stone geometry by a floating-point multiplier from `0.1` to `5`. The scale is applied around the stone center after any imported Sabaki transform, so it works for both plain themes and Sabaki themes that already define their own size and offset.
 - `--fuzzy-stone-placement` adds Shudan-style jitter to board stones. The value is a fraction of the drawn stone diameter, from `0` to `0.5`.
 - The last-move ring follows fuzzy placement through the same injected runtime script. The script records the real shifted stone center when the custom stone is drawn on the goban canvas, then adjusts the next marker-sized `arc()` call on that canvas by the same offset.
 - `--disable-default-shadows` hides `.goban canvas.shadow-canvas`, and it is enabled by default. Use `--no-disable-default-shadows` if you want to keep Pandanet's stock centered shadow layer.
