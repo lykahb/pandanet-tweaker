@@ -6,6 +6,27 @@ Produce a small CLI that takes a Pandanet `app.asar`, accepts either direct asse
 
 The tool should default to reading from a preserved `original-app.asar` when available so rebuilt themes always start from a clean base.
 
+## Current State
+
+This initialization pass sets up:
+
+- A Python package and CLI entrypoint.
+- Direct asset replacement from CLI parameters.
+- Sabaki theme inspection for directories and `.zip` packages.
+- A replacement planner and dry-run workflow.
+- An ASAR adapter interface.
+- A concrete Pandanet patch map for the primary board and stone references.
+- CSS patching for goban board texture mode.
+- Grid color override via a goban-scoped CSS filter.
+- Narrow Sabaki stone transform import for `.shudan-stone-image.shudan-sign_1` and `.shudan-stone-image.shudan-sign_-1`.
+- Project documentation and the Pandanet asset inventory.
+
+What is still intentionally unfinished:
+
+- Secondary Pandanet stone assets such as shadowed and variation images still use the stock client files.
+- Size normalization is not implemented.
+- Grid color and other canvas-drawn styling are still hardcoded in `gopanda.js`.
+
 ## Architecture
 
 ### 1. Input Layer

@@ -1,16 +1,22 @@
 # Pandanet Tweaker
 
-`pandanet-tweaker` is a single-purpose utility for swapping the board and stone theme inside the Pandanet desktop client by repacking its Electron `app.asar`.
+`pandanet-tweaker` lets you restyle the Pandanet desktop client with custom boards and stones.
 
-The installed Pandanet bundle lives at:
+It is built for people who want Pandanet to look more like the Go software they already enjoy, especially when they have a favorite Sabaki theme they want to carry over. Instead of manually digging through app files, the tool takes a theme or a few image files and builds a patched Pandanet app bundle for you.
+
+The tool aims to support the most recent Pandanet desktop client version first. When the client changes, compatibility updates should target the newest release before older builds.
+
+On macOS, the installed Pandanet bundle lives at:
 
 `/Applications/GoPanda2.app/Contents/Resources/app.asar`
 
-For repeatable theming, keep the clean upstream archive alongside it as:
+To open that app directory in Finder, open `/Applications`, right-click `GoPanda2.app`, and choose `Show Package Contents`.
+
+For repeatable theming on macOS, keep the clean upstream archive alongside it as:
 
 `/Applications/GoPanda2.app/Contents/Resources/original-app.asar`
 
-The project is built with Python and `uv`. Python handles asset loading, optional Sabaki theme import, planning, CSS and JS patching, file replacement orchestration, and ASAR handling through the `asar-py` package from <https://github.com/lykahb/asar-py>.
+The project is built with Python and `uv`, but the product goal is simple: make Pandanet theming practical, repeatable, and reversible without turning the tool into a general-purpose app patcher.
 
 ## Scope
 
@@ -28,26 +34,7 @@ The project is built with Python and `uv`. Python handles asset loading, optiona
 - Optionally tint the goban grid canvas with a CSS filter derived from a target RGBA color.
 - Rebuild a new `.asar` directly from the source archive while overwriting only the files the tool changes.
 
-## Current State
-
-This initialization pass sets up:
-
-- A Python package and CLI entrypoint.
-- Direct asset replacement from CLI parameters.
-- Sabaki theme inspection for directories and `.zip` packages.
-- A replacement planner and dry-run workflow.
-- An ASAR adapter interface.
-- A concrete Pandanet patch map for the primary board and stone references.
-- CSS patching for goban board texture mode.
-- Grid color override via a goban-scoped CSS filter.
-- Narrow Sabaki stone transform import for `.shudan-stone-image.shudan-sign_1` and `.shudan-stone-image.shudan-sign_-1`.
-- Project documentation and the Pandanet asset inventory.
-
-What is still intentionally unfinished:
-
-- Secondary Pandanet stone assets such as shadowed and variation images still use the stock client files.
-- Size normalization is not implemented.
-- Grid color and other canvas-drawn styling are still hardcoded in `gopanda.js`.
+Current implementation status lives in [docs/plan.md](/Users/borys/projects/pandanet-tweaker/docs/plan.md:1). Lower-level asset and rendering notes live in [docs/pandanet-assets.md](/Users/borys/projects/pandanet-tweaker/docs/pandanet-assets.md:1).
 
 ## CLI
 
@@ -92,7 +79,7 @@ uv run pandanet-tweaker replace \
   --output ./build/app.asar
 ```
 
-When `--asar` is omitted, the tool looks for `/Applications/GoPanda2.app/Contents/Resources/original-app.asar` first and falls back to `app.asar`.
+When `--asar` is omitted, the tool looks for `/Applications/GoPanda2.app/Contents/Resources/original-app.asar` first and falls back to `app.asar`. On Linux, pass `--asar` explicitly to the `app.asar` inside the extracted AppImage tree.
 
 If you want to skip extracting the whole archive to the filesystem first, enable direct ASAR rebuild:
 
@@ -102,7 +89,11 @@ This flow is meant to start from a clean `original-app.asar` source. If you poin
 
 ## Install Into App
 
-By default, the tool writes the patched archive to `build/app.asar`, which is ready for Finder replacement.
+By default, the tool writes the patched archive to `build/app.asar`.
+
+### macOS
+
+On macOS, `build/app.asar` is ready for Finder replacement.
 
 Before using the tool for the first time, preserve the original archive in Finder:
 
@@ -123,44 +114,40 @@ This keeps the clean base archive available, so the tool always rebuilds from th
 
 Using Finder is the simplest path on macOS because terminal writes into app bundles under `/Applications` can be blocked by system privacy controls even when normal file permissions look correct.
 
-## Board Background Modes
+### Linux
 
-- `repeat`: preserve Pandanet's tiling board background behavior.
-- `scale`: patch `app/css/site.css` so the board background is rendered once and stretched to fill the goban area.
+The Linux Pandanet client in this repository is distributed as `GoPanda2.AppImage`, which is a type-2 x86-64 AppImage with a built-in `--appimage-extract` mode. The practical Linux flow is: extract the AppImage, patch the extracted `app.asar`, then optionally rebuild a new AppImage.
 
-To avoid ambiguity:
+Before using the tool for the first time on Linux:
 
-- `--board-background` refers to the wood texture inside `.goban`.
-- The area around the board is styled separately by `.goban-page`, which uses CSS radial gradients rather than an image.
+1. Make the AppImage executable: `chmod +x GoPanda2.AppImage`
+2. Extract it in place: `./GoPanda2.AppImage --appimage-extract`
+3. Locate the Electron archive inside the extracted tree: `find squashfs-root -name app.asar`
+4. Copy that archive to a preserved clean source next to it: `cp /path/to/app.asar /path/to/original-app.asar`
 
-## Asset Handling
+Build a patched archive from the extracted AppImage contents:
 
-- The primary board and stone assets are copied into `app/img/custom/` with their original file extensions preserved.
-- Sabaki random stone variants such as `.shudan-random_1`, `.shudan-random_2`, and similar rules are also copied into `app/img/custom/` when present.
-- `app/css/site.css` is patched to point `.goban`, `.capture.*`, and `.mark.*` at those copied assets.
-- `app/js/gopanda.js` is patched so the main canvas stones load from the copied black and white stone files.
-- Sabaki imports are normalized to match Shudan's smaller default stone footprint. Shudan effectively draws stones at about `92%` of the point size, while Pandanet uses the full point size, so imported Sabaki stone transforms are scaled down before they are applied in Pandanet.
-- When a Sabaki theme defines per-stone `width`, `height`, `top`, and `left` on `.shudan-stone-image.shudan-sign_1` or `.shudan-stone-image.shudan-sign_-1`, the tool normalizes those percentage values in Python, patches related CSS background sizing/positioning, and injects a small runtime script that applies the same numeric transform to canvas `drawImage()` calls for the custom stone files.
-- When Sabaki random stone variants are present, the runtime script chooses a stable random variant per board stone draw location so the stones do not flicker on redraw.
-- When runtime stone geometry overrides are active, the tool also patches Pandanet's `goban-canvas` sizing so it uses the same outer bounds as `grid-canvas`. The runtime draw hook then adds back Pandanet's stock inset only for the transformed stone draws. That keeps the stones aligned with the grid while letting edge stones use the outer margin instead of being clipped.
-- When runtime stone geometry overrides are active, the tool also patches Pandanet's review-mode incremental redraw helper so it falls back to Pandanet's own full-board redraw. That avoids cell-by-cell repaint artifacts when stones are larger or shifted outside their original cell box.
-- `--board-background-mode` only changes how `.goban` renders the board asset: `repeat` or scaled-to-fit.
-- `--grid-rgba` appends a goban-scoped CSS override for `.goban > .grid-canvas`.
-- `--stone-scale` scales the final stone geometry by a floating-point multiplier from `0.1` to `5`. The scale is applied around the stone center after any imported Sabaki transform, so it works for both plain themes and Sabaki themes that already define their own size and offset.
-- `--fuzzy-stone-placement` adds Shudan-style jitter to board stones. The value is a fraction of the drawn stone diameter, from `0` to `0.5`.
-- Lid capture stones use a slightly larger `.capture` slot than stock Pandanet so enlarged custom stones are not clipped. The capture background geometry is scaled down to match that larger slot while keeping the info-panel marks unchanged.
-- The last-move ring follows fuzzy placement through the same injected runtime script. The script records the real shifted stone center when the custom stone is drawn on the goban canvas, then adjusts the next marker-sized `arc()` call on that canvas by the same offset.
-- `--disable-default-shadows` hides `.goban canvas.shadow-canvas`, and it is enabled by default. Use `--no-disable-default-shadows` if you want to keep Pandanet's stock centered shadow layer.
-- SVG is the preferred format when available because Electron renders it natively; no rasterization is done for the primary assets.
-- The fuzzy placement pattern follows Shudan's eight-direction shift map and neighbor-conflict suppression from `Goban.js` and `helper.js`, but the offset magnitude is scaled by the CLI value instead of being fixed in CSS. The tool does not patch Pandanet's hidden local `v0(...)` marker function directly, because that binding is not reachable through `window`; the `arc()` adjustment is the reliable seam.
+```bash
+uv run pandanet-tweaker replace /path/to/theme \
+  --asar /path/to/original-app.asar \
+  --output /tmp/app.asar
+```
 
-## Grid Override
+Install the patched archive into the extracted AppImage tree:
 
-`--grid-rgba` takes a hex color in `#RRGGBB`, `#RRGGBBAA`, `#RGB`, or `#RGBA` form and derives a CSS `filter` plus `opacity` override for the board grid canvas.
+1. Copy `/tmp/app.asar` over the extracted AppImage `app.asar` you found with `find`.
+2. Keep `original-app.asar` alongside it so future runs always rebuild from the clean base archive.
 
-This is roundabout, but it is necessary because Pandanet draws the grid lines directly onto a transparent canvas in JS with a hardcoded black stroke. CSS cannot change the canvas `strokeStyle` after the grid has already been drawn, so the only CSS-only option is to tint the rendered canvas as a whole.
+At that point you have two Linux options:
 
-The override is scoped to `.goban > .grid-canvas` because the `grid-canvas` class is also used elsewhere in the client for non-goban views.
+1. Run the extracted application directly with `./squashfs-root/AppRun`
+2. Rebuild a new AppImage from the modified extraction tree with `appimagetool squashfs-root GoPanda2-patched.AppImage`
+
+The second step requires `appimagetool` on the Linux machine. This repository does not build AppImages itself; it only produces the patched `app.asar`.
+
+### Windows
+
+Windows install steps are not documented yet. Add the verified Pandanet install path and `app.asar` replacement flow here once tested against a current Windows client build.
 
 ## Repository Layout
 
