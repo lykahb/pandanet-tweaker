@@ -4,8 +4,8 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
 
-from pandanet_theme_replacer.models import AssetRole
-from pandanet_theme_replacer.pipeline import inspect_theme
+from pandanet_tweaker.models import AssetRole
+from pandanet_tweaker.pipeline import inspect_theme
 
 
 class SabakiImportTests(unittest.TestCase):

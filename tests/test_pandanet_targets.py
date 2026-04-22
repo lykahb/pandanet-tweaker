@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from pandanet_theme_replacer.targets.pandanet import grid_rgba_to_css_filter
+from pandanet_tweaker.targets.pandanet import grid_rgba_to_css_filter
 
 
 class GridFilterTests(unittest.TestCase):

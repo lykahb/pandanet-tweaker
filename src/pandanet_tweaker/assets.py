@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from pandanet_theme_replacer.errors import ThemeImportError
-from pandanet_theme_replacer.models import AssetRole, ImportedTheme, ThemeAsset, ThemeInputSpec
+from pandanet_tweaker.errors import ThemeImportError
+from pandanet_tweaker.models import AssetRole, ImportedTheme, ThemeAsset, ThemeInputSpec
 
 
 def build_theme_from_input_spec(input_spec: ThemeInputSpec) -> ImportedTheme:

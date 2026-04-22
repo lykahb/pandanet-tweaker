@@ -4,15 +4,15 @@ import argparse
 from pathlib import Path
 import sys
 
-from pandanet_theme_replacer.errors import PandanetThemeReplacerError
-from pandanet_theme_replacer.models import BackgroundMode, ReplaceRequest, ThemeInputSpec
-from pandanet_theme_replacer.pipeline import inspect_theme, replace_theme
-from pandanet_theme_replacer.targets.pandanet import resolve_source_asar_path
+from pandanet_tweaker.errors import PandanetTweakerError
+from pandanet_tweaker.models import BackgroundMode, ReplaceRequest, ThemeInputSpec
+from pandanet_tweaker.pipeline import inspect_theme, replace_theme
+from pandanet_tweaker.targets.pandanet import resolve_source_asar_path
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="pandanet-theme-replacer",
+        prog="pandanet-tweaker",
         description="Inspect Sabaki themes and repack Pandanet app.asar with replacement assets.",
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -152,7 +152,7 @@ def main(argv: list[str] | None = None) -> int:
 
         parser.error("Unknown command")
         return 2
-    except PandanetThemeReplacerError as exc:
+    except PandanetTweakerError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
 

@@ -7,7 +7,7 @@ from tempfile import TemporaryDirectory
 from typing import Iterator
 import zipfile
 
-from pandanet_theme_replacer.errors import ThemeImportError
+from pandanet_tweaker.errors import ThemeImportError
 
 
 @dataclass(frozen=True)

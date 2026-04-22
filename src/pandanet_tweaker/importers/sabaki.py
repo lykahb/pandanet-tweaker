@@ -5,15 +5,15 @@ import json
 import re
 from urllib.parse import urlsplit
 
-from pandanet_theme_replacer.errors import ThemeImportError
-from pandanet_theme_replacer.models import (
+from pandanet_tweaker.errors import ThemeImportError
+from pandanet_tweaker.models import (
     AssetRole,
     EXPECTED_THEME_ROLES,
     ImportedTheme,
     StoneTransform,
     ThemeAsset,
 )
-from pandanet_theme_replacer.theme_sources import PreparedThemeSource
+from pandanet_tweaker.theme_sources import PreparedThemeSource
 
 URL_PATTERN = re.compile(r"url\((?P<quote>['\"]?)(?P<path>.+?)(?P=quote)\)")
 CSS_RULE_PATTERN = re.compile(r"(?P<selectors>[^{}]+)\{(?P<body>[^{}]*)\}", re.DOTALL)

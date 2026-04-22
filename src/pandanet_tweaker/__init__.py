@@ -1,4 +1,4 @@
-"""Pandanet theme replacer."""
+"""Pandanet tweaker."""
 
 __all__ = ["__version__"]
 

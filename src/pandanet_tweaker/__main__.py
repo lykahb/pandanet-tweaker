@@ -1,4 +1,4 @@
-from pandanet_theme_replacer.cli import main
+from pandanet_tweaker.cli import main
 
 
 if __name__ == "__main__":

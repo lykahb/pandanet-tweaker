@@ -6,15 +6,15 @@ from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
 
-from pandanet_theme_replacer.errors import ConfigurationError
-from pandanet_theme_replacer.models import (
+from pandanet_tweaker.errors import ConfigurationError
+from pandanet_tweaker.models import (
     AssetRole,
     BackgroundMode,
     ReplaceRequest,
     StoneTransform,
     ThemeInputSpec,
 )
-from pandanet_theme_replacer.pipeline import (
+from pandanet_tweaker.pipeline import (
     build_replacement_plan,
     build_asset_reference_map,
     build_stone_variant_reference_map,
@@ -33,8 +33,8 @@ from pandanet_theme_replacer.pipeline import (
     write_runtime_stone_transform_script,
     replace_theme,
 )
-from pandanet_theme_replacer.targets import pandanet
-from pandanet_theme_replacer.targets.pandanet import grid_rgba_to_css_filter
+from pandanet_tweaker.targets import pandanet
+from pandanet_tweaker.targets.pandanet import grid_rgba_to_css_filter
 
 PNG_1X1 = b64decode(
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+cG1EAAAAASUVORK5CYII="
@@ -206,10 +206,10 @@ class ReplacementPlanTests(unittest.TestCase):
 
             with (
                 patch(
-                    "pandanet_theme_replacer.pipeline.read_asar_file",
+                    "pandanet_tweaker.pipeline.read_asar_file",
                     side_effect=lambda _asar, path: file_map[path],
                 ) as read_file,
-                patch("pandanet_theme_replacer.pipeline.rebuild_asar") as rebuild,
+                patch("pandanet_tweaker.pipeline.rebuild_asar") as rebuild,
             ):
                 replace_theme(
                     ReplaceRequest(
@@ -366,13 +366,13 @@ class ReplacementPlanTests(unittest.TestCase):
             patch_shadow_canvas_override(css_path, disable_default_shadows=True)
             patch_shadow_canvas_override(css_path, disable_default_shadows=True)
             css_text = css_path.read_text(encoding="utf-8")
-            self.assertEqual(css_text.count("/* pandanet-theme-replacer shadow override */"), 1)
+            self.assertEqual(css_text.count("/* pandanet-tweaker shadow override */"), 1)
             self.assertIn(".goban canvas.shadow-canvas {", css_text)
             self.assertIn("display: none;", css_text)
 
             patch_shadow_canvas_override(css_path, disable_default_shadows=False)
             reverted_css_text = css_path.read_text(encoding="utf-8")
-            self.assertNotIn("/* pandanet-theme-replacer shadow override */", reverted_css_text)
+            self.assertNotIn("/* pandanet-tweaker shadow override */", reverted_css_text)
             self.assertNotIn("display: none;", reverted_css_text)
 
     def test_css_and_js_refs_are_patched_to_custom_assets(self) -> None:
@@ -502,7 +502,7 @@ class ReplacementPlanTests(unittest.TestCase):
                 + "\n",
                 encoding="utf-8",
             )
-            runtime_js_path = root / "pandanet-theme-replacer.js"
+            runtime_js_path = root / "pandanet-tweaker.js"
 
             patch_css_asset_references(css_path, refs)
             patch_js_asset_references(js_path, refs)
@@ -535,14 +535,14 @@ class ReplacementPlanTests(unittest.TestCase):
         self.assertIn("background-position: -2% -2%;", css_text)
         self.assertIn('J4(a,"goban-canvas",c)', js_text)
         self.assertIn('new l(null,2,[Ky,0,Qz,0],null)', js_text)
-        self.assertIn('window.__pandanetThemeReplacerInstallGobanContext?window.__pandanetThemeReplacerInstallGobanContext(e.getContext("2d"),d):e.getContext("2d")', js_text)
+        self.assertIn('window.__pandanetTweakerInstallGobanContext?window.__pandanetTweakerInstallGobanContext(e.getContext("2d"),d):e.getContext("2d")', js_text)
         self.assertIn("function V0(a,b){return W0(a)}", js_text)
         self.assertIn("CanvasRenderingContext2D.prototype", runtime_js_text)
         self.assertIn('"img/custom/stone-black.png": { left: -10.92, top: -8.92, width: 116.84, height: 116.84, variants: [] }', runtime_js_text)
         self.assertIn('"img/custom/stone-white.png": { left: -2, top: -2, width: 184, height: 184, variants: [] }', runtime_js_text)
         self.assertIn("arguments.length === 5", runtime_js_text)
         self.assertIn("src.indexOf(key) !== -1", runtime_js_text)
-        self.assertIn('src="js/pandanet-theme-replacer.js"', index_html_text)
+        self.assertIn('src="js/pandanet-tweaker.js"', index_html_text)
 
     def test_patch_js_force_full_board_redraw_replaces_incremental_redraw(self) -> None:
         with TemporaryDirectory() as temp_dir:
@@ -608,7 +608,7 @@ class ReplacementPlanTests(unittest.TestCase):
             js_text = js_path.read_text(encoding="utf-8")
 
         self.assertIn(
-            'window.__pandanetThemeReplacerInstallGobanContext?window.__pandanetThemeReplacerInstallGobanContext(e.getContext("2d"),d):e.getContext("2d")',
+            'window.__pandanetTweakerInstallGobanContext?window.__pandanetTweakerInstallGobanContext(e.getContext("2d"),d):e.getContext("2d")',
             js_text,
         )
 
@@ -632,7 +632,7 @@ class ReplacementPlanTests(unittest.TestCase):
             patch_index_html_for_runtime_script(index_html_path)
             html_text = index_html_path.read_text(encoding="utf-8")
 
-        self.assertEqual(html_text.count('src="js/pandanet-theme-replacer.js"'), 1)
+        self.assertEqual(html_text.count('src="js/pandanet-tweaker.js"'), 1)
 
     def test_build_runtime_stone_transform_script_uses_js_refs(self) -> None:
         script = build_runtime_stone_transform_script(
@@ -652,7 +652,7 @@ class ReplacementPlanTests(unittest.TestCase):
         )
 
         self.assertIn('"img/custom/stone-black.svg": { left: -10.92, top: -8.92, width: 116.84, height: 116.84, variants: [] }', script)
-        self.assertIn("proto.__pandanetThemeReplacerDrawImagePatched = true;", script)
+        self.assertIn("proto.__pandanetTweakerDrawImagePatched = true;", script)
 
     def test_build_runtime_stone_transform_script_uses_scaled_transforms(self) -> None:
         script = build_runtime_stone_transform_script(
@@ -720,7 +720,7 @@ class ReplacementPlanTests(unittest.TestCase):
         self.assertIn("chosenShifts[key] = randomInt(8);", script)
         self.assertIn("var diagonalScale = Math.SQRT1_2 || (1 / Math.sqrt(2));", script)
         self.assertIn("drawWidth * fuzzyStonePlacement", script)
-        self.assertIn("window.__pandanetThemeReplacerInstallGobanContext = function(ctx, inset)", script)
+        self.assertIn("window.__pandanetTweakerInstallGobanContext = function(ctx, inset)", script)
         self.assertIn("function isGobanCanvas(ctx)", script)
         self.assertIn("function getInstalledGobanInset(ctx)", script)
         self.assertIn("function isLikelyFullCanvasClear(ctx, x, y, w, h)", script)
@@ -762,7 +762,7 @@ class ReplacementPlanTests(unittest.TestCase):
             )
 
         self.assertIn(
-            "Inject app/js/pandanet-theme-replacer.js and patch app/index.html to apply stone rendering overrides at runtime.",
+            "Inject app/js/pandanet-tweaker.js and patch app/index.html to apply stone rendering overrides at runtime.",
             plan.post_actions,
         )
         self.assertIn(
@@ -795,7 +795,7 @@ class ReplacementPlanTests(unittest.TestCase):
             )
 
         self.assertIn(
-            "Inject app/js/pandanet-theme-replacer.js and patch app/index.html to apply stone rendering overrides at runtime.",
+            "Inject app/js/pandanet-tweaker.js and patch app/index.html to apply stone rendering overrides at runtime.",
             plan.post_actions,
         )
         self.assertIn(
@@ -939,7 +939,7 @@ class ReplacementPlanTests(unittest.TestCase):
             patch_grid_color_override(css_path, grid_rgba_to_css_filter("#336699cc"))
             css_text = css_path.read_text(encoding="utf-8")
 
-        self.assertIn("/* pandanet-theme-replacer grid override */", css_text)
+        self.assertIn("/* pandanet-tweaker grid override */", css_text)
         self.assertIn(".goban > .grid-canvas {", css_text)
         self.assertIn("filter: ", css_text)
         self.assertIn("opacity: 0.8;", css_text)

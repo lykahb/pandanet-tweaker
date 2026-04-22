@@ -1,6 +1,6 @@
-# Pandanet Theme Replacer
+# Pandanet Tweaker
 
-`pandanet-theme-replacer` is a single-purpose utility for swapping the board and stone theme inside the Pandanet desktop client by repacking its Electron `app.asar`.
+`pandanet-tweaker` is a single-purpose utility for swapping the board and stone theme inside the Pandanet desktop client by repacking its Electron `app.asar`.
 
 The installed Pandanet bundle lives at:
 
@@ -54,13 +54,13 @@ What is still intentionally unfinished:
 Inspect a theme:
 
 ```bash
-uv run pandanet-theme-replacer inspect-theme /path/to/theme
+uv run pandanet-tweaker inspect-theme /path/to/theme
 ```
 
 Build a dry-run plan from direct asset files:
 
 ```bash
-uv run pandanet-theme-replacer replace \
+uv run pandanet-tweaker replace \
   --board-background /path/to/board.svg \
   --board-background-mode scale \
   --black-stone /path/to/black.svg \
@@ -75,7 +75,7 @@ uv run pandanet-theme-replacer replace \
 Use a Sabaki theme, but override just one asset:
 
 ```bash
-uv run pandanet-theme-replacer replace /path/to/theme \
+uv run pandanet-tweaker replace /path/to/theme \
   --board-background /path/to/custom-board.svg \
   --board-background-mode repeat \
   --dry-run
@@ -84,7 +84,7 @@ uv run pandanet-theme-replacer replace /path/to/theme \
 Repack to a new output file:
 
 ```bash
-uv run pandanet-theme-replacer replace \
+uv run pandanet-tweaker replace \
   --board-background /path/to/board.svg \
   --board-background-mode scale \
   --black-stone /path/to/black.svg \

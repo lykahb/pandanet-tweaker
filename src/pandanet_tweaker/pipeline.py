@@ -4,14 +4,14 @@ from pathlib import Path
 import re
 from tempfile import TemporaryDirectory
 
-from pandanet_theme_replacer.assets import (
+from pandanet_tweaker.assets import (
     build_theme_from_input_spec,
     merge_theme_assets,
     normalize_theme_assets,
 )
-from pandanet_theme_replacer.errors import ConfigurationError, ThemeImportError
-from pandanet_theme_replacer.importers.sabaki import load_sabaki_theme
-from pandanet_theme_replacer.models import (
+from pandanet_tweaker.errors import ConfigurationError, ThemeImportError
+from pandanet_tweaker.importers.sabaki import load_sabaki_theme
+from pandanet_tweaker.models import (
     AssetRole,
     AssetReferenceMap,
     BackgroundMode,
@@ -23,8 +23,8 @@ from pandanet_theme_replacer.models import (
     StoneTransform,
     ThemeInputSpec,
 )
-from pandanet_theme_replacer.packaging.asar import read_asar_file, rebuild_asar
-from pandanet_theme_replacer.targets.pandanet import (
+from pandanet_tweaker.packaging.asar import read_asar_file, rebuild_asar
+from pandanet_tweaker.targets.pandanet import (
     PANDANET_GOBAN_GRID_SELECTOR,
     PANDANET_GOBAN_SHADOW_SELECTOR,
     PANDANET_CSS_REF_REPLACEMENTS,
@@ -39,16 +39,16 @@ from pandanet_theme_replacer.targets.pandanet import (
     js_ref_for_asset,
     target_path_for_asset,
 )
-from pandanet_theme_replacer.theme_sources import stage_theme_source
+from pandanet_tweaker.theme_sources import stage_theme_source
 
 GOBAN_BLOCK_PATTERN = re.compile(r"(?P<prefix>\.goban\s*\{)(?P<body>.*?)(?P<suffix>\n\})", re.DOTALL)
 CSS_BLOCK_TEMPLATE = r"(?P<prefix>{selector}\s*\{{)(?P<body>.*?)(?P<suffix>\n\s*\}})"
 GRID_OVERRIDE_BLOCK_PATTERN = re.compile(
-    r"\n/\* pandanet-theme-replacer grid override \*/\n\.goban > \.grid-canvas \{\n.*?\n\}\n?",
+    r"\n/\* pandanet-tweaker grid override \*/\n\.goban > \.grid-canvas \{\n.*?\n\}\n?",
     re.DOTALL,
 )
 SHADOW_OVERRIDE_BLOCK_PATTERN = re.compile(
-    r"\n/\* pandanet-theme-replacer shadow override \*/\n\.goban canvas\.shadow-canvas \{\n.*?\n\}\n?",
+    r"\n/\* pandanet-tweaker shadow override \*/\n\.goban canvas\.shadow-canvas \{\n.*?\n\}\n?",
     re.DOTALL,
 )
 STOCK_CAPTURE_SLOT_SIZE_PERCENT = 18.0
@@ -92,7 +92,7 @@ GOPANDA_Q0_CONTEXT_PATCHED_SNIPPET = (
     'function q0(a,b,c,d){var e=function(){var k=W(F(["goban-canvas",a]));return Z.j?Z.j(k):Z.call(null,k)}(),'
     'f=function(){var k=W(F(["grid-canvas",a]));return Z.j?Z.j(k):Z.call(null,k)}(),'
     'g=function(){var k=W(F(["shadow-canvas",a]));return Z.j?Z.j(k):Z.call(null,k)}();'
-    'return jk([Xr,jx,Qia,yca,QA,R,Qx,voa,Uy,rH],[f.getContext("2d"),c,g,e,g.getContext("2d"),a,d,f,window.__pandanetThemeReplacerInstallGobanContext?window.__pandanetThemeReplacerInstallGobanContext(e.getContext("2d"),d):e.getContext("2d"),b])}'
+    'return jk([Xr,jx,Qia,yca,QA,R,Qx,voa,Uy,rH],[f.getContext("2d"),c,g,e,g.getContext("2d"),a,d,f,window.__pandanetTweakerInstallGobanContext?window.__pandanetTweakerInstallGobanContext(e.getContext("2d"),d):e.getContext("2d"),b])}'
 )
 
 
@@ -593,7 +593,7 @@ def patch_grid_color_override(site_css_path: Path, grid_filter) -> None:
     css_text = site_css_path.read_text(encoding="utf-8")
     css_text = GRID_OVERRIDE_BLOCK_PATTERN.sub("\n", css_text)
     override_block = (
-        "\n/* pandanet-theme-replacer grid override */\n"
+        "\n/* pandanet-tweaker grid override */\n"
         f"{PANDANET_GOBAN_GRID_SELECTOR} {{\n"
         f"  filter: {grid_filter.filter_css};\n"
         f"  opacity: {grid_filter.opacity_css};\n"
@@ -610,7 +610,7 @@ def patch_shadow_canvas_override(site_css_path: Path, *, disable_default_shadows
     css_text = SHADOW_OVERRIDE_BLOCK_PATTERN.sub("\n", css_text)
     if disable_default_shadows:
         override_block = (
-            "\n/* pandanet-theme-replacer shadow override */\n"
+            "\n/* pandanet-tweaker shadow override */\n"
             f"{PANDANET_GOBAN_SHADOW_SELECTOR} {{\n"
             "  display: none;\n"
             "}\n"
@@ -687,7 +687,7 @@ def build_runtime_stone_transform_script(
         "(function(){\n"
         "  var proto = CanvasRenderingContext2D && CanvasRenderingContext2D.prototype;\n"
         "  if (!proto) return;\n"
-        "  if (proto.__pandanetThemeReplacerDrawImagePatched) return;\n"
+        "  if (proto.__pandanetTweakerDrawImagePatched) return;\n"
         "  var configs = {\n"
         f"{configs_block}\n"
         "  };\n"
@@ -697,23 +697,23 @@ def build_runtime_stone_transform_script(
         "  var variantImages = {};\n"
         "  var chosenVariantIndexes = {};\n"
         "  var chosenShifts = {};\n"
-        "  var markerStateKey = '__pandanetThemeReplacerPendingMarkerState';\n"
+        "  var markerStateKey = '__pandanetTweakerPendingMarkerState';\n"
         "  var originalDrawImage = proto.drawImage;\n"
         "  var originalClearRect = proto.clearRect;\n"
         "  var originalArc = proto.arc;\n"
         f"  var fuzzyStonePlacement = {format(fuzzy_stone_placement, 'g')};\n"
         "  var diagonalScale = Math.SQRT1_2 || (1 / Math.sqrt(2));\n"
-        "  window.__pandanetThemeReplacerInstallGobanContext = function(ctx, inset) {\n"
+        "  window.__pandanetTweakerInstallGobanContext = function(ctx, inset) {\n"
         "    if (!ctx) return ctx;\n"
         "    var targetInset = typeof inset === 'number' ? inset : 0;\n"
-        "    var currentInset = typeof ctx.__pandanetThemeReplacerGobanInset === 'number' ? ctx.__pandanetThemeReplacerGobanInset : 0;\n"
-        "    if (ctx.__pandanetThemeReplacerContextInstalled && Math.abs(currentInset - targetInset) < 0.01) return ctx;\n"
+        "    var currentInset = typeof ctx.__pandanetTweakerGobanInset === 'number' ? ctx.__pandanetTweakerGobanInset : 0;\n"
+        "    if (ctx.__pandanetTweakerContextInstalled && Math.abs(currentInset - targetInset) < 0.01) return ctx;\n"
         "    if (typeof ctx.translate === 'function') {\n"
         "      ctx.translate(targetInset - currentInset, targetInset - currentInset);\n"
         "    }\n"
-        "    ctx.__pandanetThemeReplacerGobanInset = targetInset;\n"
-        "    ctx.__pandanetThemeReplacerContextInstalled = true;\n"
-        "    if (ctx.canvas) ctx.canvas.__pandanetThemeReplacerGobanInset = targetInset;\n"
+        "    ctx.__pandanetTweakerGobanInset = targetInset;\n"
+        "    ctx.__pandanetTweakerContextInstalled = true;\n"
+        "    if (ctx.canvas) ctx.canvas.__pandanetTweakerGobanInset = targetInset;\n"
         "    return ctx;\n"
         "  };\n"
         "  function cljsEq(left, right) {\n"
@@ -737,9 +737,9 @@ def build_runtime_stone_transform_script(
         "  }\n"
         "  function getInstalledGobanInset(ctx) {\n"
         "    if (!isGobanCanvas(ctx)) return 0;\n"
-        "    if (ctx && typeof ctx.__pandanetThemeReplacerGobanInset === 'number') return ctx.__pandanetThemeReplacerGobanInset;\n"
+        "    if (ctx && typeof ctx.__pandanetTweakerGobanInset === 'number') return ctx.__pandanetTweakerGobanInset;\n"
         "    var canvas = ctx && ctx.canvas;\n"
-        "    if (canvas && typeof canvas.__pandanetThemeReplacerGobanInset === 'number') return canvas.__pandanetThemeReplacerGobanInset;\n"
+        "    if (canvas && typeof canvas.__pandanetTweakerGobanInset === 'number') return canvas.__pandanetTweakerGobanInset;\n"
         "    return 0;\n"
         "  }\n"
         "  function isLikelyFullCanvasClear(ctx, x, y, w, h) {\n"
@@ -905,7 +905,7 @@ def build_runtime_stone_transform_script(
         "    }\n"
         "    return originalArc.call(this, x, y, r, startAngle, endAngle, counterclockwise);\n"
         "  };\n"
-        "  proto.__pandanetThemeReplacerDrawImagePatched = true;\n"
+        "  proto.__pandanetTweakerDrawImagePatched = true;\n"
         "}());\n"
     )
 

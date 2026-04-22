@@ -9,7 +9,7 @@ The goal is not to explain the whole client. The goal is to make future upgrades
 1. Extract the new `app.asar`.
 2. Search `app/js/gopanda.js` for the patch anchors listed below.
 3. Confirm that the same semantic seam still exists.
-4. Update the exact snippet or regex in `src/pandanet_theme_replacer/pipeline.py`.
+4. Update the exact snippet or regex in `src/pandanet_tweaker/pipeline.py`.
 5. Re-run the focused unit tests that cover the patch.
 6. Verify visually in the app:
    - observation mode stones
@@ -72,7 +72,7 @@ The goal is not to explain the whole client. The goal is to make future upgrades
   - `e.getContext("2d")`
 - Current change:
   - stock stores `e.getContext("2d")` directly under `Uy`
-  - patched stores `window.__pandanetThemeReplacerInstallGobanContext(e.getContext("2d"),d)` under `Uy`
+  - patched stores `window.__pandanetTweakerInstallGobanContext(e.getContext("2d"),d)` under `Uy`
 - Why this seam:
   - `q0(...)` builds the goban render state.
   - `Uy` is the goban 2D context used by stones, preview stones, review marks, labels, and the last-move marker path.
@@ -108,7 +108,7 @@ The goal is not to explain the whole client. The goal is to make future upgrades
 
 These are not minified-source replacements, but they rely on the seams above:
 
-- `window.__pandanetThemeReplacerInstallGobanContext(...)`
+- `window.__pandanetTweakerInstallGobanContext(...)`
   - installed by the injected runtime script
   - applies the original inset translation to the goban context once
 - `CanvasRenderingContext2D.prototype.drawImage`

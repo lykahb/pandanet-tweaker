@@ -15,6 +15,6 @@ Build a narrow CLI utility that replaces Pandanet board and stone assets inside 
 ## Near-Term Priorities
 
 1. Inventory the actual Pandanet theme assets inside `app.asar`.
-2. Encode those targets in `src/pandanet_theme_replacer/targets/pandanet.py`.
+2. Encode those targets in `src/pandanet_tweaker/targets/pandanet.py`.
 3. Add image normalization rules if Pandanet expects fixed sizes or sprite sheets.
 4. Add fixture-based integration tests around extract/replace/pack flow.

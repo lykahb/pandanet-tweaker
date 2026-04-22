@@ -5,7 +5,7 @@ import math
 from pathlib import Path
 import random
 
-from pandanet_theme_replacer.models import AssetRole, ThemeAsset
+from pandanet_tweaker.models import AssetRole, ThemeAsset
 
 DEFAULT_ASAR_DIR = Path("/Applications/GoPanda2.app/Contents/Resources")
 DEFAULT_ASAR_PATH = Path("/Applications/GoPanda2.app/Contents/Resources/app.asar")
@@ -13,8 +13,8 @@ DEFAULT_ORIGINAL_ASAR_PATH = Path("/Applications/GoPanda2.app/Contents/Resources
 PANDANET_INDEX_HTML_PATH = Path("app/index.html")
 PANDANET_SITE_CSS_PATH = Path("app/css/site.css")
 PANDANET_GOPANDA_JS_PATH = Path("app/js/gopanda.js")
-PANDANET_THEME_RUNTIME_JS_PATH = Path("app/js/pandanet-theme-replacer.js")
-PANDANET_THEME_RUNTIME_SCRIPT_SRC = "js/pandanet-theme-replacer.js"
+PANDANET_THEME_RUNTIME_JS_PATH = Path("app/js/pandanet-tweaker.js")
+PANDANET_THEME_RUNTIME_SCRIPT_SRC = "js/pandanet-tweaker.js"
 PANDANET_CUSTOM_ASSET_DIR = Path("app/img/custom")
 PANDANET_GOBAN_GRID_SELECTOR = ".goban > .grid-canvas"
 PANDANET_GOBAN_SHADOW_SELECTOR = ".goban canvas.shadow-canvas"

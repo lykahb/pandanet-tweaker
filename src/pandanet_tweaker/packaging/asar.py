@@ -4,7 +4,7 @@ import io
 from importlib import import_module
 from pathlib import Path
 
-from pandanet_theme_replacer.errors import ExternalToolError
+from pandanet_tweaker.errors import ExternalToolError
 
 
 def extract_asar(asar_path: Path, destination: Path) -> None:

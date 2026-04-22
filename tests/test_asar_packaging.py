@@ -5,7 +5,7 @@ from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
 
-from pandanet_theme_replacer.packaging.asar import (
+from pandanet_tweaker.packaging.asar import (
     extract_asar,
     pack_asar,
     read_asar_file,
@@ -27,7 +27,7 @@ class AsarPackagingTests(unittest.TestCase):
                 def extract_archive(left: Path, right: Path) -> None:
                     calls.append((left, right))
 
-            with patch("pandanet_theme_replacer.packaging.asar._import_asar_module", return_value=FakeAsarModule):
+            with patch("pandanet_tweaker.packaging.asar._import_asar_module", return_value=FakeAsarModule):
                 extract_asar(asar_path, destination)
                 self.assertTrue(destination.is_dir())
 
@@ -46,7 +46,7 @@ class AsarPackagingTests(unittest.TestCase):
                 def create_archive(left: Path, right: Path) -> None:
                     calls.append((left, right))
 
-            with patch("pandanet_theme_replacer.packaging.asar._import_asar_module", return_value=FakeAsarModule):
+            with patch("pandanet_tweaker.packaging.asar._import_asar_module", return_value=FakeAsarModule):
                 pack_asar(source_directory, output_path)
 
         self.assertEqual(calls, [(source_directory, output_path)])
@@ -75,7 +75,7 @@ class AsarPackagingTests(unittest.TestCase):
             class FakeAsarModule:
                 AsarArchive = FakeArchive
 
-            with patch("pandanet_theme_replacer.packaging.asar._import_asar_module", return_value=FakeAsarModule):
+            with patch("pandanet_tweaker.packaging.asar._import_asar_module", return_value=FakeAsarModule):
                 result = read_asar_file(asar_path, Path("app/css/site.css"))
 
         self.assertEqual(result, b"payload")
@@ -160,7 +160,7 @@ class AsarPackagingTests(unittest.TestCase):
                         return FakeSourceArchive(archive_path, mode)
                     return FakeOutputArchive(archive_path, mode)
 
-            with patch("pandanet_theme_replacer.packaging.asar._import_asar_module", return_value=FakeAsarModule()):
+            with patch("pandanet_tweaker.packaging.asar._import_asar_module", return_value=FakeAsarModule()):
                 rebuild_asar(
                     source_asar,
                     output_path,

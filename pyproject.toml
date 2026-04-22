@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "pandanet-theme-replacer"
+name = "pandanet-tweaker"
 version = "0.1.0"
 description = "Repack the Pandanet Go client app.asar with a custom board theme."
 readme = "README.md"
@@ -14,7 +14,7 @@ dependencies = [
 ]
 
 [project.scripts]
-pandanet-theme-replacer = "pandanet_theme_replacer.cli:main"
+pandanet-tweaker = "pandanet_tweaker.cli:main"
 
 [tool.uv]
 package = true
@@ -23,4 +23,4 @@ package = true
 allow-direct-references = true
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/pandanet_theme_replacer"]
+packages = ["src/pandanet_tweaker"]
