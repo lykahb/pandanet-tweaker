@@ -10,7 +10,7 @@ readme = "README.md"
 requires-python = ">=3.12"
 authors = [{ name = "OpenAI Codex" }]
 dependencies = [
-    "asar>=0.1.2",
+    "asar @ git+https://github.com/lykahb/asar-py.git",
 ]
 
 [project.scripts]
@@ -18,6 +18,9 @@ pandanet-theme-replacer = "pandanet_theme_replacer.cli:main"
 
 [tool.uv]
 package = true
+
+[tool.hatch.metadata]
+allow-direct-references = true
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/pandanet_theme_replacer"]

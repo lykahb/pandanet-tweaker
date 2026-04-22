@@ -10,7 +10,7 @@ For repeatable theming, keep the clean upstream archive alongside it as:
 
 `/Applications/GoPanda2.app/Contents/Resources/original-app.asar`
 
-The project is built with Python and `uv`. Python handles asset loading, optional Sabaki theme import, planning, CSS and JS patching, file replacement orchestration, and ASAR handling through the Python [`asar`](https://pypi.org/project/asar/) package.
+The project is built with Python and `uv`. Python handles asset loading, optional Sabaki theme import, planning, CSS and JS patching, file replacement orchestration, and ASAR handling through the `asar-py` package from <https://github.com/lykahb/asar-py>.
 
 ## Scope
 
@@ -185,6 +185,6 @@ python3 -m unittest discover -s tests -t . -v
 - Sabaki theme examples: <https://github.com/billhails/SabakiThemes>
   - Repository README confirms themes are installed inside Sabaki as downloadable theme files.
   - The current importer makes a conservative inference from Sabaki package structure and CSS asset references.
-- Python ASAR library: <https://pypi.org/project/asar/>
+- Python ASAR library: <https://github.com/lykahb/asar-py>
 - Pandanet app inventory:
   - Extracted from `/Applications/GoPanda2.app/Contents/Resources/app.asar` on April 18, 2026.
