@@ -465,6 +465,10 @@ class ReplacementPlanTests(unittest.TestCase):
                   background: url("../img/50/stone-white-w-shadow.png") no-repeat;
                   background-size: 100%;
                 }
+                .goban-page .lid .lid-captures .capture {
+                  width: 18%;
+                  height: 18%;
+                }
                 .goban-page .info-panel .info-panel-wrapper .name-rank .mark.white {
                   background-image: url("../img/50/stone-white.png");
                 }
@@ -517,6 +521,14 @@ class ReplacementPlanTests(unittest.TestCase):
         self.assertEqual(refs.css_refs[AssetRole.STONE_WHITE], "../img/custom/stone-white.png")
         self.assertEqual(refs.js_refs[AssetRole.STONE_BLACK], "img/custom/stone-black.png")
         self.assertEqual(refs.js_refs[AssetRole.STONE_WHITE], "img/custom/stone-white.png")
+        self.assertIn("width: 24%;", css_text)
+        self.assertIn("height: 24%;", css_text)
+        self.assertIn("margin-left: -3%;", css_text)
+        self.assertIn("margin-top: -3%;", css_text)
+        self.assertIn("background-size: 87.63% 87.63%;", css_text)
+        self.assertIn("background-position: -8.19% -6.69%;", css_text)
+        self.assertIn("background-size: 138% 138%;", css_text)
+        self.assertIn("background-position: -1.5% -1.5%;", css_text)
         self.assertIn("background-size: 116.84% 116.84%;", css_text)
         self.assertIn("background-position: -10.92% -8.92%;", css_text)
         self.assertIn("background-size: 184% 184%;", css_text)

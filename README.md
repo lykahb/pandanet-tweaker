@@ -148,6 +148,7 @@ To avoid ambiguity:
 - `--grid-rgba` appends a goban-scoped CSS override for `.goban > .grid-canvas`.
 - `--stone-scale` scales the final stone geometry by a floating-point multiplier from `0.1` to `5`. The scale is applied around the stone center after any imported Sabaki transform, so it works for both plain themes and Sabaki themes that already define their own size and offset.
 - `--fuzzy-stone-placement` adds Shudan-style jitter to board stones. The value is a fraction of the drawn stone diameter, from `0` to `0.5`.
+- Lid capture stones use a slightly larger `.capture` slot than stock Pandanet so enlarged custom stones are not clipped. The capture background geometry is scaled down to match that larger slot while keeping the info-panel marks unchanged.
 - The last-move ring follows fuzzy placement through the same injected runtime script. The script records the real shifted stone center when the custom stone is drawn on the goban canvas, then adjusts the next marker-sized `arc()` call on that canvas by the same offset.
 - `--disable-default-shadows` hides `.goban canvas.shadow-canvas`, and it is enabled by default. Use `--no-disable-default-shadows` if you want to keep Pandanet's stock centered shadow layer.
 - SVG is the preferred format when available because Electron renders it natively; no rasterization is done for the primary assets.

@@ -51,6 +51,8 @@ SHADOW_OVERRIDE_BLOCK_PATTERN = re.compile(
     r"\n/\* pandanet-theme-replacer shadow override \*/\n\.goban canvas\.shadow-canvas \{\n.*?\n\}\n?",
     re.DOTALL,
 )
+STOCK_CAPTURE_SLOT_SIZE_PERCENT = 18.0
+PATCHED_CAPTURE_SLOT_SIZE_PERCENT = 24.0
 INDEX_HTML_RUNTIME_SCRIPT_PATTERN = re.compile(
     rf'<script src="{re.escape(PANDANET_THEME_RUNTIME_SCRIPT_SRC)}" type="text/javascript"></script>'
 )
@@ -422,6 +424,17 @@ def patch_css_stone_transforms(site_css_path: Path, stone_transforms: dict[Asset
         raise ConfigurationError(f"Expected CSS file was not found: {site_css_path}")
 
     css_text = site_css_path.read_text(encoding="utf-8")
+    capture_transform_scale = STOCK_CAPTURE_SLOT_SIZE_PERCENT / PATCHED_CAPTURE_SLOT_SIZE_PERCENT
+    css_text = _patch_css_block_if_present(
+        css_text,
+        ".goban-page .lid .lid-captures .capture",
+        {
+            "width": f"{format(PATCHED_CAPTURE_SLOT_SIZE_PERCENT, 'g')}%",
+            "height": f"{format(PATCHED_CAPTURE_SLOT_SIZE_PERCENT, 'g')}%",
+            "margin-left": f"{format(-(PATCHED_CAPTURE_SLOT_SIZE_PERCENT - STOCK_CAPTURE_SLOT_SIZE_PERCENT) / 2, 'g')}%",
+            "margin-top": f"{format(-(PATCHED_CAPTURE_SLOT_SIZE_PERCENT - STOCK_CAPTURE_SLOT_SIZE_PERCENT) / 2, 'g')}%",
+        },
+    )
     selector_map = {
         AssetRole.STONE_BLACK: (
             ".goban-page .lid .lid-captures .capture.white",
@@ -437,12 +450,17 @@ def patch_css_stone_transforms(site_css_path: Path, stone_transforms: dict[Asset
         if transform is None:
             continue
         for selector in selectors:
+            css_transform = (
+                multiply_stone_transform(transform, capture_transform_scale)
+                if ".lid .lid-captures .capture" in selector
+                else transform
+            )
             css_text = _patch_css_block(
                 css_text,
                 selector,
                 {
-                    "background-size": f"{transform.width} {transform.height}",
-                    "background-position": f"{transform.left} {transform.top}",
+                    "background-size": f"{css_transform.width} {css_transform.height}",
+                    "background-position": f"{css_transform.left} {css_transform.top}",
                 },
             )
 
@@ -618,6 +636,13 @@ def _patch_css_block(css_text: str, selector: str, declarations: dict[str, str])
     filtered.extend(f"  {name}: {value};" for name, value in declarations.items())
     new_block = f"{match.group('prefix')}{''.join(f'{line}\n' for line in filtered)}{match.group('suffix')}"
     return css_text[: match.start()] + new_block + css_text[match.end() :]
+
+
+def _patch_css_block_if_present(css_text: str, selector: str, declarations: dict[str, str]) -> str:
+    try:
+        return _patch_css_block(css_text, selector, declarations)
+    except ConfigurationError:
+        return css_text
 
 
 def build_runtime_stone_transform_script(
@@ -923,6 +948,15 @@ def scale_stone_transform(transform: StoneTransform, stone_scale: float) -> Ston
         height=f"{format(new_height, 'g')}%",
         top=f"{format(top, 'g')}%",
         left=f"{format(left, 'g')}%",
+    )
+
+
+def multiply_stone_transform(transform: StoneTransform, multiplier: float) -> StoneTransform:
+    return StoneTransform(
+        width=f"{format(_percent_value(transform.width) * multiplier, 'g')}%",
+        height=f"{format(_percent_value(transform.height) * multiplier, 'g')}%",
+        top=f"{format(_percent_value(transform.top) * multiplier, 'g')}%",
+        left=f"{format(_percent_value(transform.left) * multiplier, 'g')}%",
     )
 
 
