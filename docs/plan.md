@@ -12,7 +12,7 @@ This initialization pass sets up:
 
 - A Python package and CLI entrypoint.
 - Direct asset replacement from CLI parameters.
-- Sabaki theme inspection for directories and `.zip` packages.
+- Sabaki theme inspection for `.asar` packs, plus directory and `.zip` compatibility.
 - A replacement planner and dry-run workflow.
 - An ASAR adapter interface.
 - A concrete Pandanet patch map for the primary board and stone references.
@@ -34,7 +34,7 @@ What is still intentionally unfinished:
 Responsibilities:
 
 - Accept explicit CLI asset paths for board, black stone, and white stone.
-- Accept a theme directory or `.zip`.
+- Accept a theme `.asar`, plus directory or `.zip` inputs.
 - Detect Sabaki package structure.
 - Read theme metadata from `package.json`.
 - Discover the image assets referenced by the theme CSS.

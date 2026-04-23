@@ -274,6 +274,40 @@ class ReplacementPlanTests(unittest.TestCase):
         self.assertEqual(black_asset.source_ref, str(override.resolve()))
         self.assertEqual(black_asset.filename, "stone-black.png")
 
+    def test_replace_dry_run_accepts_asar_theme_input(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            theme_asar = root / "baduktv-grunge.asar"
+            theme_asar.write_bytes(b"asar")
+
+            def fake_extract_asar(_source: Path, destination: Path) -> None:
+                (destination / "package.json").write_text('{"name": "asar-theme"}', encoding="utf-8")
+                (destination / "theme.css").write_text(
+                    """
+                    .board { background-image: url("board.jpg"); }
+                    .black { background-image: url("black.png"); }
+                    .white { background-image: url("white.png"); }
+                    """,
+                    encoding="utf-8",
+                )
+                (destination / "board.jpg").write_bytes(JPEG_1X1)
+                (destination / "black.png").write_bytes(PNG_1X1)
+                (destination / "white.png").write_bytes(PNG_1X1)
+
+            with patch("pandanet_tweaker.theme_sources.extract_asar", side_effect=fake_extract_asar) as extract:
+                plan = replace_theme(
+                    ReplaceRequest(
+                        input_spec=self._make_input_spec(theme_path=theme_asar),
+                        asar_path=root / "app.asar",
+                        output_path=root / "out.asar",
+                        dry_run=True,
+                    )
+                )
+
+        extract.assert_called_once_with(theme_asar.resolve(), unittest.mock.ANY)
+        self.assertEqual(plan.theme.name, "asar-theme")
+        self.assertTrue(all(operation.status == "ready" for operation in plan.operations))
+
     def test_load_input_theme_preserves_css_selected_stone_variant(self) -> None:
         with TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

@@ -12,7 +12,7 @@ Current implementation status lives in [docs/plan.md](/Users/borys/projects/pand
 
 ![Pandanet Tweaker screenshot with the BadukTV theme](docs/images/pandanet-baduktv.jpg)
 
-*BadukTV theme, fuzzy stone placement. Generated with `uv run pandanet-tweaker replace --fuzzy-stone-placement 0.04 --stone-scale=0.97 ~/Downloads/Upsided-Sabaki-Themes-main/baduktv`.*
+*BadukTV theme, fuzzy stone placement. Generated with `uv run pandanet-tweaker replace --fuzzy-stone-placement=0.04 --stone-scale=0.97 ~/Downloads/Upsided-Sabaki-Themes-main/baduktv`.*
 
 
 ## Installation
@@ -78,7 +78,7 @@ The usual way to use the tool is `replace`.
 For a first real run, use a Sabaki theme:
 
 ```bash
-uv run pandanet-tweaker replace /path/to/theme
+uv run pandanet-tweaker replace ~/Downloads/Upsided-Sabaki-Themes-main/packs/baduktv-grunge.asar
 ```
 
 More common usage patterns are listed below.
@@ -100,7 +100,7 @@ Most people will use `replace`.
 Use a Sabaki theme:
 
 ```bash
-uv run pandanet-tweaker replace /path/to/theme
+uv run pandanet-tweaker replace ~/Downloads/Upsided-Sabaki-Themes-main/packs/baduktv-grunge.asar
 ```
 
 Use plain image files:
@@ -115,7 +115,7 @@ uv run pandanet-tweaker replace \
 Use a Sabaki theme, but override one asset:
 
 ```bash
-uv run pandanet-tweaker replace /path/to/theme \
+uv run pandanet-tweaker replace ~/Downloads/Upsided-Sabaki-Themes-main/packs/baduktv-grunge.asar \
   --board-background /path/to/custom-board.svg \
   --board-background-mode repeat
 ```
@@ -134,14 +134,17 @@ uv run pandanet-tweaker replace \
 Preview the plan without writing a new archive yet:
 
 ```bash
-uv run pandanet-tweaker replace /path/to/theme --dry-run
+uv run pandanet-tweaker replace ~/Downloads/Upsided-Sabaki-Themes-main/packs/baduktv-grunge.asar --dry-run
 ```
 
 Advanced: inspect a theme without building a replacement:
 
 ```bash
-uv run pandanet-tweaker inspect-theme /path/to/theme
+uv run pandanet-tweaker inspect-theme ~/Downloads/Upsided-Sabaki-Themes-main/packs/baduktv-grunge.asar
 ```
+
+Theme inputs can be a Sabaki theme `.asar` pack, a directory, or a `.zip`. The recommended input is a pack such as
+`~/Downloads/Upsided-Sabaki-Themes-main/packs/baduktv-grunge.asar`.
 
 When `--asar` is omitted, the tool looks for `/Applications/GoPanda2.app/Contents/Resources/original-app.asar` first and falls back to `app.asar`. On Linux, pass `--asar` explicitly to the `app.asar` inside the extracted AppImage tree.
 
@@ -192,7 +195,7 @@ Before using the tool for the first time on Linux:
 Build a patched archive from the extracted AppImage contents:
 
 ```bash
-uv run pandanet-tweaker replace /path/to/theme \
+uv run pandanet-tweaker replace ~/Downloads/Upsided-Sabaki-Themes-main/packs/baduktv-grunge.asar \
   --asar /path/to/original-app.asar \
   --output /tmp/app.asar
 ```

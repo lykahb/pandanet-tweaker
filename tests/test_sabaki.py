@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
+from unittest.mock import patch
 
 from pandanet_tweaker.models import AssetRole
 from pandanet_tweaker.pipeline import inspect_theme
@@ -31,6 +32,38 @@ class SabakiImportTests(unittest.TestCase):
             theme = inspect_theme(root)
 
         self.assertEqual(theme.name, "example-theme")
+        self.assertEqual({asset.role.value for asset in theme.assets}, {"board", "stone-black", "stone-white"})
+        self.assertEqual(theme.warnings, ())
+
+    def test_detects_board_and_stones_from_asar_theme(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            archive_path = root / "baduktv-grunge.asar"
+            archive_path.write_bytes(b"asar")
+
+            def fake_extract_asar(_source: Path, destination: Path) -> None:
+                (destination / "package.json").write_text(
+                    '{"name": "asar-theme", "version": "1.2.3"}',
+                    encoding="utf-8",
+                )
+                (destination / "theme.css").write_text(
+                    """
+                    .board { background-image: url("board.jpg"); }
+                    .black { background-image: url("black.png"); }
+                    .white { background-image: url("white.png"); }
+                    """,
+                    encoding="utf-8",
+                )
+                (destination / "board.jpg").write_bytes(b"board")
+                (destination / "black.png").write_bytes(b"black")
+                (destination / "white.png").write_bytes(b"white")
+
+            with patch("pandanet_tweaker.theme_sources.extract_asar", side_effect=fake_extract_asar) as extract:
+                theme = inspect_theme(archive_path)
+
+        extract.assert_called_once_with(archive_path.resolve(), unittest.mock.ANY)
+        self.assertEqual(theme.name, "asar-theme")
+        self.assertEqual(theme.source, archive_path.resolve())
         self.assertEqual({asset.role.value for asset in theme.assets}, {"board", "stone-black", "stone-white"})
         self.assertEqual(theme.warnings, ())
 

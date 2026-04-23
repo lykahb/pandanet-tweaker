@@ -20,7 +20,11 @@ def build_parser() -> argparse.ArgumentParser:
     inspect_parser = subparsers.add_parser(
         "inspect-theme", help="Inspect a theme package and print the detected assets."
     )
-    inspect_parser.add_argument("theme", type=Path, help="Path to a Sabaki theme directory or zip.")
+    inspect_parser.add_argument(
+        "theme",
+        type=Path,
+        help="Path to a Sabaki theme asar, directory, or zip.",
+    )
     inspect_parser.add_argument(
         "--format", choices=("auto", "sabaki"), default="auto", help="Theme input format."
     )
@@ -33,7 +37,7 @@ def build_parser() -> argparse.ArgumentParser:
         "theme",
         nargs="?",
         type=Path,
-        help="Optional path to a Sabaki theme directory or zip.",
+        help="Optional path to a Sabaki theme asar, directory, or zip.",
     )
     replace_parser.add_argument(
         "--asar",

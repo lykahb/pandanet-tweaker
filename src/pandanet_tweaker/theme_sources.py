@@ -8,6 +8,7 @@ from typing import Iterator
 import zipfile
 
 from pandanet_tweaker.errors import ThemeImportError
+from pandanet_tweaker.packaging.asar import extract_asar
 
 
 @dataclass(frozen=True)
@@ -27,13 +28,17 @@ def stage_theme_source(source_path: Path) -> Iterator[PreparedThemeSource]:
         yield PreparedThemeSource(source_path=source_path, staged_root=source_path)
         return
 
-    if source_path.suffix.lower() != ".zip":
+    suffix = source_path.suffix.lower()
+    if suffix not in {".zip", ".asar"}:
         raise ThemeImportError(
-            f"Unsupported theme source: {source_path}. Expected a directory or .zip file."
+            f"Unsupported theme source: {source_path}. Expected a directory, .zip file, or .asar file."
         )
 
     with TemporaryDirectory(prefix="pandanet-theme-") as temp_dir:
-        temp_path = Path(temp_dir)
-        with zipfile.ZipFile(source_path) as archive:
-            archive.extractall(temp_path)
+        temp_path = Path(temp_dir).resolve()
+        if suffix == ".zip":
+            with zipfile.ZipFile(source_path) as archive:
+                archive.extractall(temp_path)
+        else:
+            extract_asar(source_path, temp_path)
         yield PreparedThemeSource(source_path=source_path, staged_root=temp_path)
