@@ -145,7 +145,7 @@ For fuzzy placement and last-move marker alignment, the runtime script uses two 
 
 That `arc()` hook is used instead of trying to override Pandanet's internal `v0(...)` marker function. In the extracted client, `v0(...)` is a local compiled binding rather than `window.v0`, so replacing `window.v0` has no effect on the actual marker path.
 
-Review mode redraws are handled differently from observation hover previews. In the extracted client, review updates normally go through `V0(...)`, which clears and redraws only one cell, while full-board redraw uses `W0(...)`. When runtime stone geometry overrides are active, the tool patches `V0(...)` to call `W0(...)` instead. That avoids persistent repaint artifacts from enlarged or shifted stones extending beyond their original cell rectangle.
+Review mode redraws are handled differently from observation hover previews. In the extracted macOS client, review updates normally go through `V0(...)`, which clears and redraws only one cell, while full-board redraw uses `W0(...)`. When runtime stone geometry overrides are active, the tool patches `V0(...)` to call `W0(...)` instead. In the current Windows client, the equivalent single-cell review redraw is also patched to full-board redraw, and the hover-preview helper `W0(a,b,c)` is patched to use `T0(a)` before drawing the translucent preview stone. That avoids persistent repaint artifacts from enlarged or shifted stones extending beyond their original cell rectangle.
 
 Lid capture stones use a slightly larger `.capture` slot than stock Pandanet so enlarged custom stones are not clipped. The capture background geometry is scaled down to match that larger slot while keeping the info-panel marks unchanged.
 

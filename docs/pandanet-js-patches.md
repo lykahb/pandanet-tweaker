@@ -123,6 +123,50 @@ The goal is not to explain the whole client. The goal is to make future upgrades
   - `test_patch_js_force_full_board_redraw_replaces_incremental_redraw`
   - `test_patch_js_force_full_board_redraw_replaces_windows_incremental_redraw`
 
+### `force_review_hover_full_redraw`
+
+- Purpose: avoid review hover preview trails when runtime stone geometry overrides make preview stones extend beyond a single cell box.
+- File: `app/js/gopanda.js`
+- Current seam:
+  - Windows reference: `function W0(a,b,c)`
+- Search anchor:
+  - `function W0(a,b,c)`
+  - `S0(a,c);`
+  - `e.globalAlpha=.5`
+  - `s0(a,b,d,c)`
+- Current change:
+  - Windows stock: `function W0(a,b,c){S0(a,c);...s0(a,b,d,c)...}`
+  - Windows patched: `function W0(a,b,c){T0(a);...s0(a,b,d,c)...}`
+- Why this seam:
+  - `W0(...)` is the review hover preview helper in the current Windows build.
+  - It clears and redraws the hovered intersection before drawing the translucent preview stone.
+  - With enlarged or shifted stones, that single-cell redraw leaves stale pixels behind, so the safe path is the existing full-board redraw helper.
+- Failure symptom:
+  - review hover preview leaves faint trails or blurry stone remnants while moving across intersections
+- Tests:
+  - `test_patch_js_force_full_board_hover_preview_redraw_replaces_windows_preview_redraw`
+
+### `force_review_hover_full_clear`
+
+- Purpose: avoid review hover preview trails by clearing the previously hovered preview stone with a full-board redraw.
+- File: `app/js/gopanda.js`
+- Current seam:
+  - Windows reference: `function i2(a)`
+- Search anchor:
+  - `function i2(a)`
+  - `S0(a,g2)`
+  - `h2=g2=null`
+- Current change:
+  - Windows stock: `function i2(a){return m(g2)?(S0(a,g2),h2=g2=null):null}`
+  - Windows patched: `function i2(a){return m(g2)?(T0(a),h2=g2=null):null}`
+- Why this seam:
+  - `i2(...)` clears the previous review hover preview before the next preview is drawn.
+  - In the current Windows build it only redraws one cell, which is not enough once the preview stone can extend beyond its original cell rectangle.
+- Failure symptom:
+  - the previous hovered stone leaves a faint trace when moving across intersections in review mode
+- Tests:
+  - `test_patch_js_force_full_board_hover_preview_clear_replaces_windows_preview_clear`
+
 ## Related Runtime Hooks
 
 These are not minified-source replacements, but they rely on the seams above:

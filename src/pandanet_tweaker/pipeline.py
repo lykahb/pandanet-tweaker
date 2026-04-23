@@ -76,6 +76,20 @@ WIN_GOPANDA_FULL_REDRAW_SNIPPET = (
     "k+=1}else if(e=x(e))kg(e)?(f=De(e),e=Ee(e),n=f,g=E(f),f=n):(n=A(e),f=b,iX(d,n)[3]=f,e=B(e),"
     "f=null,g=0),k=0;else break a}return T0(a)}return null}"
 )
+WIN_GOPANDA_HOVER_PREVIEW_REDRAW_SNIPPET = (
+    "function W0(a,b,c){S0(a,c);var d=jX(mB.fa(a),c);a=Tw.fa(a);a=J(a);var e=t(a,Vy);e.save();"
+    "e.globalAlpha=.5;s0(a,b,d,c);return e.restore()}"
+)
+WIN_GOPANDA_HOVER_PREVIEW_FULL_REDRAW_SNIPPET = (
+    "function W0(a,b,c){T0(a);var d=jX(mB.fa(a),c);a=Tw.fa(a);a=J(a);var e=t(a,Vy);e.save();"
+    "e.globalAlpha=.5;s0(a,b,d,c);return e.restore()}"
+)
+WIN_GOPANDA_HOVER_PREVIEW_CLEAR_SNIPPET = (
+    "function i2(a){return m(g2)?(S0(a,g2),h2=g2=null):null}"
+)
+WIN_GOPANDA_HOVER_PREVIEW_FULL_CLEAR_SNIPPET = (
+    "function i2(a){return m(g2)?(T0(a),h2=g2=null):null}"
+)
 GOPANDA_GOBAN_CANVAS_CREATION_SNIPPET = (
     'function K4(a,b){var c=J(b);b=t(c,lD);c=t(c,Cz);return new Sf(null,J4(a,"grid-canvas",c),'
     'new Sf(null,J4(a,"shadow-canvas",b),new Sf(null,J4(a,"goban-canvas",b),null,1,null),2,null),3,null)}'
@@ -206,6 +220,12 @@ def build_replacement_plan(
         post_actions.append(
             f"Patch {PANDANET_GOPANDA_JS_PATH} so review-mode cell redraws use full-board redraw instead."
         )
+        post_actions.append(
+            f"Patch {PANDANET_GOPANDA_JS_PATH} so review hover preview redraws use full-board redraw instead."
+        )
+        post_actions.append(
+            f"Patch {PANDANET_GOPANDA_JS_PATH} so clearing the previous review hover preview uses full-board redraw instead."
+        )
     if fuzzy_stone_placement > 0:
         post_actions.append(
             f"Apply Shudan-style fuzzy stone placement with maximum offset {fuzzy_stone_placement:g} stone diameters."
@@ -335,6 +355,8 @@ def _apply_replacement_plan_direct(
             patch_js_expand_goban_canvas(gopanda_js_path)
             patch_js_translate_expanded_goban_context(gopanda_js_path)
             patch_js_force_full_board_redraw(gopanda_js_path)
+            patch_js_force_full_board_hover_preview_redraw(gopanda_js_path)
+            patch_js_force_full_board_hover_preview_clear(gopanda_js_path)
         patch_shadow_canvas_override(
             site_css_path,
             disable_default_shadows=disable_default_shadows,
@@ -588,6 +610,46 @@ def patch_js_force_full_board_redraw(gopanda_js_path: Path) -> None:
             return
 
     raise ConfigurationError(f"Could not find supported V0 incremental redraw function in {gopanda_js_path}")
+
+
+def patch_js_force_full_board_hover_preview_redraw(gopanda_js_path: Path) -> None:
+    # Upgrade notes for this seam live in docs/pandanet-js-patches.md.
+    if not gopanda_js_path.is_file():
+        raise ConfigurationError(f"Expected JS file was not found: {gopanda_js_path}")
+
+    js_text = gopanda_js_path.read_text(encoding="utf-8")
+    if WIN_GOPANDA_HOVER_PREVIEW_FULL_REDRAW_SNIPPET in js_text:
+        return
+
+    patched = js_text.replace(
+        WIN_GOPANDA_HOVER_PREVIEW_REDRAW_SNIPPET,
+        WIN_GOPANDA_HOVER_PREVIEW_FULL_REDRAW_SNIPPET,
+        1,
+    )
+    if patched == js_text:
+        return
+
+    gopanda_js_path.write_text(patched, encoding="utf-8")
+
+
+def patch_js_force_full_board_hover_preview_clear(gopanda_js_path: Path) -> None:
+    # Upgrade notes for this seam live in docs/pandanet-js-patches.md.
+    if not gopanda_js_path.is_file():
+        raise ConfigurationError(f"Expected JS file was not found: {gopanda_js_path}")
+
+    js_text = gopanda_js_path.read_text(encoding="utf-8")
+    if WIN_GOPANDA_HOVER_PREVIEW_FULL_CLEAR_SNIPPET in js_text:
+        return
+
+    patched = js_text.replace(
+        WIN_GOPANDA_HOVER_PREVIEW_CLEAR_SNIPPET,
+        WIN_GOPANDA_HOVER_PREVIEW_FULL_CLEAR_SNIPPET,
+        1,
+    )
+    if patched == js_text:
+        return
+
+    gopanda_js_path.write_text(patched, encoding="utf-8")
 
 
 def patch_js_expand_goban_canvas(gopanda_js_path: Path) -> None:

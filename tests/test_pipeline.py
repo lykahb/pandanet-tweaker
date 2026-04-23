@@ -29,6 +29,8 @@ from pandanet_tweaker.pipeline import (
     patch_js_asset_references,
     patch_js_expand_goban_canvas,
     patch_js_force_full_board_redraw,
+    patch_js_force_full_board_hover_preview_redraw,
+    patch_js_force_full_board_hover_preview_clear,
     patch_js_translate_expanded_goban_context,
     write_runtime_stone_transform_script,
     replace_theme,
@@ -536,6 +538,7 @@ class ReplacementPlanTests(unittest.TestCase):
             patch_js_expand_goban_canvas(js_path)
             patch_js_translate_expanded_goban_context(js_path)
             patch_js_force_full_board_redraw(js_path)
+            patch_js_force_full_board_hover_preview_redraw(js_path)
             patch_css_stone_transforms(css_path, theme.stone_transforms)
             write_runtime_stone_transform_script(runtime_js_path, theme.stone_transforms, refs.js_refs, {}, 0.0)
             patch_index_html_for_runtime_script(index_html_path)
@@ -601,6 +604,40 @@ class ReplacementPlanTests(unittest.TestCase):
 
         self.assertIn("return T0(a)}return null}", js_text)
         self.assertEqual(js_text.count("return T0(a)}return null}"), 1)
+
+    def test_patch_js_force_full_board_hover_preview_redraw_replaces_windows_preview_redraw(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            js_path = Path(temp_dir) / "gopanda.js"
+            js_path.write_text(
+                'function S0(a,c){}function T0(a){}function jX(a,c){}function s0(a,b,d,c){}function Tw(){}'
+                'function W0(a,b,c){S0(a,c);var d=jX(mB.fa(a),c);a=Tw.fa(a);a=J(a);var e=t(a,Vy);e.save();e.globalAlpha=.5;s0(a,b,d,c);return e.restore()}',
+                encoding="utf-8",
+            )
+
+            patch_js_force_full_board_hover_preview_redraw(js_path)
+            patch_js_force_full_board_hover_preview_redraw(js_path)
+            js_text = js_path.read_text(encoding="utf-8")
+
+        self.assertIn("function W0(a,b,c){T0(a);", js_text)
+        self.assertEqual(js_text.count("function W0(a,b,c){T0(a);"), 1)
+
+    def test_patch_js_force_full_board_hover_preview_clear_replaces_windows_preview_clear(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            js_path = Path(temp_dir) / "gopanda.js"
+            js_path.write_text(
+                'function S0(a,c){}function T0(a){}function i2(a){return m(g2)?(S0(a,g2),h2=g2=null):null}',
+                encoding="utf-8",
+            )
+
+            patch_js_force_full_board_hover_preview_clear(js_path)
+            patch_js_force_full_board_hover_preview_clear(js_path)
+            js_text = js_path.read_text(encoding="utf-8")
+
+        self.assertIn("function i2(a){return m(g2)?(T0(a),h2=g2=null):null}", js_text)
+        self.assertEqual(
+            js_text.count("function i2(a){return m(g2)?(T0(a),h2=g2=null):null}"),
+            1,
+        )
 
     def test_patch_js_expand_goban_canvas_replaces_inset_layout(self) -> None:
         with TemporaryDirectory() as temp_dir:
