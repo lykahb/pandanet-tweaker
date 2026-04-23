@@ -236,6 +236,6 @@ python3 -m unittest discover -s tests -t . -v
 - Sabaki theme examples: <https://github.com/billhails/SabakiThemes>
   - Repository README confirms themes are installed inside Sabaki as downloadable theme files.
   - The current importer makes a conservative inference from Sabaki package structure and CSS asset references.
-- Python ASAR library: <https://github.com/lykahb/asar-py>
+- Python ASAR library: <https://pypi.org/project/asar/>
 - Pandanet app inventory:
   - Extracted from `/Applications/GoPanda2.app/Contents/Resources/app.asar` on April 18, 2026.

@@ -157,7 +157,7 @@ Files:
 
 Responsibilities:
 
-- isolate the third-party `asar-py` dependency
+- isolate the third-party `asar` dependency
 - expose read, extract, pack, and rebuild operations
 - translate backend failures into project errors
 

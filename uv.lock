@@ -4,8 +4,12 @@ requires-python = ">=3.12"
 
 [[package]]
 name = "asar"
-version = "0.1.2"
-source = { git = "https://github.com/lykahb/asar-py.git#bf012a9b3333fce097b5fcbb42a7e33a06f6256f" }
+version = "0.1.3"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/66/9d/ce3ae33175999332a0ab70f819761c09223c344c8c73076e32758db9a754/asar-0.1.3.tar.gz", hash = "sha256:1acf1ff02bf1422e768696fbaeb35672b5801ee066f78fdee4edfeaa65215ea1", size = 9923, upload-time = "2026-04-23T01:13:27.007Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/f3/85/ba4449fce9b06eba0ee3e64ee08c9808b9e783fae846e50c380faa74e12d/asar-0.1.3-py3-none-any.whl", hash = "sha256:63aec0413baa681aa69a99cb0a10c518c98b6ad6bc51c47557c54134d2149ed8", size = 8698, upload-time = "2026-04-23T01:13:26.088Z" },
+]
 
 [[package]]
 name = "pandanet-tweaker"
@@ -16,4 +20,4 @@ dependencies = [
 ]
 
 [package.metadata]
-requires-dist = [{ name = "asar", git = "https://github.com/lykahb/asar-py.git" }]
+requires-dist = [{ name = "asar", specifier = ">=0.1.3" }]

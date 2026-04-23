@@ -55,7 +55,7 @@ def _import_asar_module():
         asar_module = import_module("asar")
     except ModuleNotFoundError as exc:
         raise ExternalToolError(
-            "Python ASAR backend is not available. Install it from https://github.com/lykahb/asar-py."
+            "Python ASAR backend is not available. Install it with `pip install 'asar>=0.1.3'`."
         ) from exc
     return asar_module
 

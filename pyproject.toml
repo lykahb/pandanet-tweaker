@@ -10,7 +10,7 @@ readme = "README.md"
 requires-python = ">=3.12"
 authors = [{ name = "Borys Lykah" }]
 dependencies = [
-    "asar @ git+https://github.com/lykahb/asar-py.git",
+    "asar>=0.1.3",
 ]
 
 [project.scripts]
@@ -18,9 +18,6 @@ pandanet-tweaker = "pandanet_tweaker.cli:main"
 
 [tool.uv]
 package = true
-
-[tool.hatch.metadata]
-allow-direct-references = true
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/pandanet_tweaker"]
