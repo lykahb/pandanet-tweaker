@@ -112,6 +112,11 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Print the replacement plan without rebuilding the ASAR.",
     )
+    replace_parser.add_argument(
+        "--verbose",
+        action="store_true",
+        help="Print detailed replacement plan and post-actions.",
+    )
 
     return parser
 
@@ -151,7 +156,7 @@ def main(argv: list[str] | None = None) -> int:
                 dry_run=args.dry_run,
             )
             plan = replace_theme(request)
-            _print_replacement_plan(plan, asar_path, args.output, args.dry_run)
+            _print_replacement_plan(plan, asar_path, args.output, args.dry_run, verbose=args.verbose)
             if not args.dry_run:
                 _print_next_steps(asar_path, args.output)
             return 0
@@ -183,23 +188,24 @@ def _print_theme_summary(theme) -> None:
             print(f"- {warning}")
 
 
-def _print_replacement_plan(plan, asar_path: Path, output_path: Path, dry_run: bool) -> None:
+def _print_replacement_plan(plan, asar_path: Path, output_path: Path, dry_run: bool, *, verbose: bool) -> None:
     print(f"Theme: {plan.theme.name}")
     print(f"ASAR: {asar_path}")
     print(f"Output: {output_path}")
     print(f"Mode: {'dry-run' if dry_run else 'replace'}")
-    print("Plan:")
-    for operation in plan.operations:
-        source_ref = operation.source_asset.source_ref if operation.source_asset else "missing"
-        target_ref = str(operation.target_relative_path) if operation.target_relative_path else "missing"
-        print(
-            f"- {operation.role.value}: {operation.status} | source={source_ref} | "
-            f"target={target_ref} | {operation.reason}"
-        )
-    if plan.post_actions:
-        print("Post-actions:")
-        for action in plan.post_actions:
-            print(f"- {action}")
+    if verbose:
+        print("Plan:")
+        for operation in plan.operations:
+            source_ref = operation.source_asset.source_ref if operation.source_asset else "missing"
+            target_ref = str(operation.target_relative_path) if operation.target_relative_path else "missing"
+            print(
+                f"- {operation.role.value}: {operation.status} | source={source_ref} | "
+                f"target={target_ref} | {operation.reason}"
+            )
+        if plan.post_actions:
+            print("Post-actions:")
+            for action in plan.post_actions:
+                print(f"- {action}")
 
 
 def _print_next_steps(source_asar_path: Path, output_path: Path) -> None:
@@ -214,13 +220,12 @@ def _print_next_steps(source_asar_path: Path, output_path: Path) -> None:
         preserved_original_path = None
 
     print("Next Steps:")
-    print(f"- Patched archive: {resolved_output_path}")
     if install_target_path is not None:
-        print(f"- Quit GoPanda, then replace: {install_target_path}")
+        print(f"- Quit GoPanda, then replace {install_target_path} with {resolved_output_path}")
         if preserved_original_path is not None:
             print(f"- Keep the clean source archive in place: {preserved_original_path}")
         else:
             print("- Keep a clean original-app.asar next to the installed app.asar for future rebuilds.")
     else:
-        print("- Copy the patched archive over the installed Pandanet app.asar on the target machine.")
+        print(f"- Patched archive: {resolved_output_path}")
         print("- Keep a clean original-app.asar next to the installed app.asar so future runs rebuild from stock files.")
