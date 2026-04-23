@@ -7,7 +7,7 @@ import sys
 from pandanet_tweaker.errors import PandanetTweakerError
 from pandanet_tweaker.models import BackgroundMode, ReplaceRequest, ThemeInputSpec
 from pandanet_tweaker.pipeline import inspect_theme, replace_theme
-from pandanet_tweaker.targets.pandanet import resolve_source_asar_path
+from pandanet_tweaker.targets.pandanet import infer_install_target_asar_path, resolve_source_asar_path
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -42,7 +42,7 @@ def build_parser() -> argparse.ArgumentParser:
     replace_parser.add_argument(
         "--asar",
         type=Path,
-        help="Source Pandanet ASAR path. Defaults to original-app.asar when present, otherwise app.asar.",
+        help="Source Pandanet ASAR path. Defaults to the platform install original-app.asar when present, otherwise app.asar.",
     )
     replace_parser.add_argument(
         "--output",
@@ -152,6 +152,8 @@ def main(argv: list[str] | None = None) -> int:
             )
             plan = replace_theme(request)
             _print_replacement_plan(plan, asar_path, args.output, args.dry_run)
+            if not args.dry_run:
+                _print_next_steps(asar_path, args.output)
             return 0
 
         parser.error("Unknown command")
@@ -198,3 +200,27 @@ def _print_replacement_plan(plan, asar_path: Path, output_path: Path, dry_run: b
         print("Post-actions:")
         for action in plan.post_actions:
             print(f"- {action}")
+
+
+def _print_next_steps(source_asar_path: Path, output_path: Path) -> None:
+    resolved_output_path = output_path.expanduser().resolve()
+    install_target_path = infer_install_target_asar_path(source_asar_path)
+    source_asar_path = source_asar_path.expanduser()
+    if source_asar_path.name == "original-app.asar":
+        preserved_original_path = source_asar_path
+    elif install_target_path is not None:
+        preserved_original_path = install_target_path.with_name("original-app.asar")
+    else:
+        preserved_original_path = None
+
+    print("Next Steps:")
+    print(f"- Patched archive: {resolved_output_path}")
+    if install_target_path is not None:
+        print(f"- Quit GoPanda, then replace: {install_target_path}")
+        if preserved_original_path is not None:
+            print(f"- Keep the clean source archive in place: {preserved_original_path}")
+        else:
+            print("- Keep a clean original-app.asar next to the installed app.asar for future rebuilds.")
+    else:
+        print("- Copy the patched archive over the installed Pandanet app.asar on the target machine.")
+        print("- Keep a clean original-app.asar next to the installed app.asar so future runs rebuild from stock files.")

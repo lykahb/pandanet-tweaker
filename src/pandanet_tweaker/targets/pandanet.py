@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import math
+import os
 from pathlib import Path
+import platform
 import random
 
 from pandanet_tweaker.models import AssetRole, ThemeAsset
@@ -10,6 +12,7 @@ from pandanet_tweaker.models import AssetRole, ThemeAsset
 DEFAULT_ASAR_DIR = Path("/Applications/GoPanda2.app/Contents/Resources")
 DEFAULT_ASAR_PATH = Path("/Applications/GoPanda2.app/Contents/Resources/app.asar")
 DEFAULT_ORIGINAL_ASAR_PATH = Path("/Applications/GoPanda2.app/Contents/Resources/original-app.asar")
+WINDOWS_DEFAULT_ASAR_DIR_SUFFIX = Path("Programs/GoPanda2/resources")
 PANDANET_INDEX_HTML_PATH = Path("app/index.html")
 PANDANET_SITE_CSS_PATH = Path("app/css/site.css")
 PANDANET_GOPANDA_JS_PATH = Path("app/js/gopanda.js")
@@ -39,14 +42,44 @@ PANDANET_JS_REF_REPLACEMENTS: dict[str, AssetRole] = {
 }
 
 
+def default_asar_dir() -> Path:
+    if platform.system() == "Windows":
+        local_appdata = os.environ.get("LOCALAPPDATA")
+        if local_appdata:
+            return Path(local_appdata) / WINDOWS_DEFAULT_ASAR_DIR_SUFFIX
+        return Path.home() / "AppData" / "Local" / WINDOWS_DEFAULT_ASAR_DIR_SUFFIX
+
+    return DEFAULT_ASAR_DIR
+
+
+def default_asar_path() -> Path:
+    return default_asar_dir() / "app.asar"
+
+
+def default_original_asar_path() -> Path:
+    return default_asar_dir() / "original-app.asar"
+
+
 def resolve_source_asar_path(explicit_path: Path | None = None) -> Path:
     if explicit_path is not None:
         return explicit_path.expanduser()
 
-    if DEFAULT_ORIGINAL_ASAR_PATH.is_file():
-        return DEFAULT_ORIGINAL_ASAR_PATH
+    original_asar_path = default_original_asar_path()
+    if original_asar_path.is_file():
+        return original_asar_path
 
-    return DEFAULT_ASAR_PATH
+    return default_asar_path()
+
+
+def infer_install_target_asar_path(source_asar_path: Path) -> Path | None:
+    source_asar_path = source_asar_path.expanduser()
+
+    if source_asar_path.name == "original-app.asar":
+        return source_asar_path.with_name("app.asar")
+    if source_asar_path.name == "app.asar":
+        return source_asar_path
+
+    return None
 
 
 def target_path_for_asset(asset: ThemeAsset) -> Path:

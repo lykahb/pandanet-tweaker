@@ -10,6 +10,14 @@ Recommended clean source archive:
 
 `/Applications/GoPanda2.app/Contents/Resources/original-app.asar`
 
+Typical Windows target bundle:
+
+`C:\Users\<username>\AppData\Local\Programs\GoPanda2\resources\app.asar`
+
+Recommended Windows clean source archive:
+
+`C:\Users\<username>\AppData\Local\Programs\GoPanda2\resources\original-app.asar`
+
 ## Purpose
 
 This document should become the authoritative inventory of the Pandanet client assets relevant to theming.

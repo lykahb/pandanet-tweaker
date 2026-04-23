@@ -62,6 +62,20 @@ INDEX_HTML_GOPANDA_SCRIPT_PATTERN = re.compile(
 # Keep these minified patch anchors documented in docs/pandanet-js-patches.md.
 GOPANDA_INCREMENTAL_REDRAW_SNIPPET = "function V0(a,b){var c=J(a);a=t(c,Rw);c=t(c,lB);w0(a,b);return U0(a,c,b)}"
 GOPANDA_FULL_REDRAW_SNIPPET = "function V0(a,b){return W0(a)}"
+WIN_GOPANDA_INCREMENTAL_REDRAW_SNIPPET = (
+    "function V0(a,b,c){if(D.Ma(c,dE))return null;var d=mB.fa(a);d=iX(d,c)[3];"
+    "b=null==b||null==d||D.Ma(b,d)?b:qs;if(Hh(d,b)){a:{var e=new O(null,1,5,P,[c],null);"
+    "d=J(a);d=t(d,mB);e=x(e);for(var f=null,g=0,k=0;;)if(k<g){var n=f.G(null,k),r=b;iX(d,n)[3]=r;"
+    "k+=1}else if(e=x(e))kg(e)?(f=De(e),e=Ee(e),n=f,g=E(f),f=n):(n=A(e),f=b,iX(d,n)[3]=f,e=B(e),"
+    "f=null,g=0),k=0;else break a}return S0(a,c)}return null}"
+)
+WIN_GOPANDA_FULL_REDRAW_SNIPPET = (
+    "function V0(a,b,c){if(D.Ma(c,dE))return null;var d=mB.fa(a);d=iX(d,c)[3];"
+    "b=null==b||null==d||D.Ma(b,d)?b:qs;if(Hh(d,b)){a:{var e=new O(null,1,5,P,[c],null);"
+    "d=J(a);d=t(d,mB);e=x(e);for(var f=null,g=0,k=0;;)if(k<g){var n=f.G(null,k),r=b;iX(d,n)[3]=r;"
+    "k+=1}else if(e=x(e))kg(e)?(f=De(e),e=Ee(e),n=f,g=E(f),f=n):(n=A(e),f=b,iX(d,n)[3]=f,e=B(e),"
+    "f=null,g=0),k=0;else break a}return T0(a)}return null}"
+)
 GOPANDA_GOBAN_CANVAS_CREATION_SNIPPET = (
     'function K4(a,b){var c=J(b);b=t(c,lD);c=t(c,Cz);return new Sf(null,J4(a,"grid-canvas",c),'
     'new Sf(null,J4(a,"shadow-canvas",b),new Sf(null,J4(a,"goban-canvas",b),null,1,null),2,null),3,null)}'
@@ -69,6 +83,14 @@ GOPANDA_GOBAN_CANVAS_CREATION_SNIPPET = (
 GOPANDA_GOBAN_CANVAS_EXPANDED_CREATION_SNIPPET = (
     'function K4(a,b){var c=J(b);b=t(c,lD);c=t(c,Cz);return new Sf(null,J4(a,"grid-canvas",c),'
     'new Sf(null,J4(a,"shadow-canvas",b),new Sf(null,J4(a,"goban-canvas",c),null,1,null),2,null),3,null)}'
+)
+WIN_GOPANDA_GOBAN_CANVAS_CREATION_SNIPPET = (
+    'function H4(a,b){var c=J(b);b=t(c,mD);c=t(c,Dz);return new Rf(null,G4(a,"grid-canvas",c),'
+    'new Rf(null,G4(a,"shadow-canvas",b),new Rf(null,G4(a,"goban-canvas",b),null,1,null),2,null),3,null)}'
+)
+WIN_GOPANDA_GOBAN_CANVAS_EXPANDED_CREATION_SNIPPET = (
+    'function H4(a,b){var c=J(b);b=t(c,mD);c=t(c,Dz);return new Rf(null,G4(a,"grid-canvas",c),'
+    'new Rf(null,G4(a,"shadow-canvas",b),new Rf(null,G4(a,"goban-canvas",c),null,1,null),2,null),3,null)}'
 )
 GOPANDA_GOBAN_CANVAS_POSITION_SNIPPET = (
     'OT(function(){var n=W(F(["goban-canvas",a]));return Z.j?Z.j(n):Z.call(null,n)}(),'
@@ -82,6 +104,18 @@ GOPANDA_GOBAN_CANVAS_POSITION_PATTERN = re.compile(
     r'OT\(function\(\)\{var n=\s*W\(F\(\["goban-canvas",a\]\)\);return Z\.j\?Z\.j\(n\):Z\.call\(null,n\)\}\(\),'
     r'new l\(null,2,\[Ky,ou\.j\(b\),Qz,ou\.j\(b\)\],null\),F\(\["px"\]\)\);'
 )
+WIN_GOPANDA_GOBAN_CANVAS_POSITION_SNIPPET = (
+    'aU(function(){var n=W(F(["goban-canvas",a]));return Z.fa?Z.fa(n):Z.call(null,n)}(),'
+    'new l(null,2,[Ly,qu.fa(b),Rz,qu.fa(b)],null),F(["px"]));'
+)
+WIN_GOPANDA_GOBAN_CANVAS_EXPANDED_POSITION_SNIPPET = (
+    'aU(function(){var n=W(F(["goban-canvas",a]));return Z.fa?Z.fa(n):Z.call(null,n)}(),'
+    'new l(null,2,[Ly,0,Rz,0],null),F(["px"]));'
+)
+WIN_GOPANDA_GOBAN_CANVAS_POSITION_PATTERN = re.compile(
+    r'aU\(function\(\)\{var n=\s*W\(F\(\["goban-canvas",a\]\)\);return Z\.fa\?Z\.fa\(n\):Z\.call\(null,n\)\}\(\),'
+    r'new l\(null,2,\[Ly,qu\.fa\(b\),Rz,qu\.fa\(b\)\],null\),F\(\["px"\]\)\);'
+)
 GOPANDA_Q0_CONTEXT_SNIPPET = (
     'function q0(a,b,c,d){var e=function(){var k=W(F(["goban-canvas",a]));return Z.j?Z.j(k):Z.call(null,k)}(),'
     'f=function(){var k=W(F(["grid-canvas",a]));return Z.j?Z.j(k):Z.call(null,k)}(),'
@@ -93,6 +127,18 @@ GOPANDA_Q0_CONTEXT_PATCHED_SNIPPET = (
     'f=function(){var k=W(F(["grid-canvas",a]));return Z.j?Z.j(k):Z.call(null,k)}(),'
     'g=function(){var k=W(F(["shadow-canvas",a]));return Z.j?Z.j(k):Z.call(null,k)}();'
     'return jk([Xr,jx,Qia,yca,QA,R,Qx,voa,Uy,rH],[f.getContext("2d"),c,g,e,g.getContext("2d"),a,d,f,window.__pandanetTweakerInstallGobanContext?window.__pandanetTweakerInstallGobanContext(e.getContext("2d"),d):e.getContext("2d"),b])}'
+)
+WIN_GOPANDA_Q0_CONTEXT_SNIPPET = (
+    'function n0(a,b,c,d){var e=function(){var k=W(F(["goban-canvas",a]));return Z.fa?Z.fa(k):Z.call(null,k)}(),'
+    'f=function(){var k=W(F(["grid-canvas",a]));return Z.fa?Z.fa(k):Z.call(null,k)}(),'
+    'g=function(){var k=W(F(["shadow-canvas",a]));return Z.fa?Z.fa(k):Z.call(null,k)}();'
+    'return ik([Zr,lx,Nia,vca,RA,R,Sx,poa,Vy,sH],[f.getContext("2d"),c,g,e,g.getContext("2d"),a,d,f,e.getContext("2d"),b])}'
+)
+WIN_GOPANDA_Q0_CONTEXT_PATCHED_SNIPPET = (
+    'function n0(a,b,c,d){var e=function(){var k=W(F(["goban-canvas",a]));return Z.fa?Z.fa(k):Z.call(null,k)}(),'
+    'f=function(){var k=W(F(["grid-canvas",a]));return Z.fa?Z.fa(k):Z.call(null,k)}(),'
+    'g=function(){var k=W(F(["shadow-canvas",a]));return Z.fa?Z.fa(k):Z.call(null,k)}();'
+    'return ik([Zr,lx,Nia,vca,RA,R,Sx,poa,Vy,sH],[f.getContext("2d"),c,g,e,g.getContext("2d"),a,d,f,window.__pandanetTweakerInstallGobanContext?window.__pandanetTweakerInstallGobanContext(e.getContext("2d"),d):e.getContext("2d"),b])}'
 )
 
 
@@ -529,14 +575,19 @@ def patch_js_force_full_board_redraw(gopanda_js_path: Path) -> None:
         raise ConfigurationError(f"Expected JS file was not found: {gopanda_js_path}")
 
     js_text = gopanda_js_path.read_text(encoding="utf-8")
-    if GOPANDA_FULL_REDRAW_SNIPPET in js_text:
+    if GOPANDA_FULL_REDRAW_SNIPPET in js_text or WIN_GOPANDA_FULL_REDRAW_SNIPPET in js_text:
         return
 
-    patched = js_text.replace(GOPANDA_INCREMENTAL_REDRAW_SNIPPET, GOPANDA_FULL_REDRAW_SNIPPET, 1)
-    if patched == js_text:
-        raise ConfigurationError(f"Could not find V0 incremental redraw function in {gopanda_js_path}")
+    for stock_snippet, patched_snippet in (
+        (GOPANDA_INCREMENTAL_REDRAW_SNIPPET, GOPANDA_FULL_REDRAW_SNIPPET),
+        (WIN_GOPANDA_INCREMENTAL_REDRAW_SNIPPET, WIN_GOPANDA_FULL_REDRAW_SNIPPET),
+    ):
+        patched = js_text.replace(stock_snippet, patched_snippet, 1)
+        if patched != js_text:
+            gopanda_js_path.write_text(patched, encoding="utf-8")
+            return
 
-    gopanda_js_path.write_text(patched, encoding="utf-8")
+    raise ConfigurationError(f"Could not find supported V0 incremental redraw function in {gopanda_js_path}")
 
 
 def patch_js_expand_goban_canvas(gopanda_js_path: Path) -> None:
@@ -545,29 +596,50 @@ def patch_js_expand_goban_canvas(gopanda_js_path: Path) -> None:
         raise ConfigurationError(f"Expected JS file was not found: {gopanda_js_path}")
 
     js_text = gopanda_js_path.read_text(encoding="utf-8")
-    if (
-        GOPANDA_GOBAN_CANVAS_EXPANDED_CREATION_SNIPPET in js_text
-        and GOPANDA_GOBAN_CANVAS_EXPANDED_POSITION_SNIPPET in js_text
+    if any(
+        expanded_creation in js_text and expanded_position in js_text
+        for expanded_creation, expanded_position in (
+            (
+                GOPANDA_GOBAN_CANVAS_EXPANDED_CREATION_SNIPPET,
+                GOPANDA_GOBAN_CANVAS_EXPANDED_POSITION_SNIPPET,
+            ),
+            (
+                WIN_GOPANDA_GOBAN_CANVAS_EXPANDED_CREATION_SNIPPET,
+                WIN_GOPANDA_GOBAN_CANVAS_EXPANDED_POSITION_SNIPPET,
+            ),
+        )
     ):
         return
 
-    patched = js_text.replace(
-        GOPANDA_GOBAN_CANVAS_CREATION_SNIPPET,
-        GOPANDA_GOBAN_CANVAS_EXPANDED_CREATION_SNIPPET,
-        1,
-    )
-    if patched == js_text:
-        raise ConfigurationError(f"Could not find goban canvas creation function in {gopanda_js_path}")
+    patched = js_text
+    if GOPANDA_GOBAN_CANVAS_EXPANDED_CREATION_SNIPPET not in patched and WIN_GOPANDA_GOBAN_CANVAS_EXPANDED_CREATION_SNIPPET not in patched:
+        for stock_snippet, patched_snippet in (
+            (GOPANDA_GOBAN_CANVAS_CREATION_SNIPPET, GOPANDA_GOBAN_CANVAS_EXPANDED_CREATION_SNIPPET),
+            (WIN_GOPANDA_GOBAN_CANVAS_CREATION_SNIPPET, WIN_GOPANDA_GOBAN_CANVAS_EXPANDED_CREATION_SNIPPET),
+        ):
+            updated = patched.replace(stock_snippet, patched_snippet, 1)
+            if updated != patched:
+                patched = updated
+                break
+        else:
+            raise ConfigurationError(f"Could not find supported goban canvas creation function in {gopanda_js_path}")
 
-    updated, count = GOPANDA_GOBAN_CANVAS_POSITION_PATTERN.subn(
-        GOPANDA_GOBAN_CANVAS_EXPANDED_POSITION_SNIPPET,
-        patched,
-        count=1,
-    )
-    if count != 1:
-        raise ConfigurationError(f"Could not find goban canvas positioning block in {gopanda_js_path}")
+    if (
+        GOPANDA_GOBAN_CANVAS_EXPANDED_POSITION_SNIPPET not in patched
+        and WIN_GOPANDA_GOBAN_CANVAS_EXPANDED_POSITION_SNIPPET not in patched
+    ):
+        for pattern, replacement in (
+            (GOPANDA_GOBAN_CANVAS_POSITION_PATTERN, GOPANDA_GOBAN_CANVAS_EXPANDED_POSITION_SNIPPET),
+            (WIN_GOPANDA_GOBAN_CANVAS_POSITION_PATTERN, WIN_GOPANDA_GOBAN_CANVAS_EXPANDED_POSITION_SNIPPET),
+        ):
+            updated, count = pattern.subn(replacement, patched, count=1)
+            if count == 1:
+                patched = updated
+                break
+        else:
+            raise ConfigurationError(f"Could not find supported goban canvas positioning block in {gopanda_js_path}")
 
-    gopanda_js_path.write_text(updated, encoding="utf-8")
+    gopanda_js_path.write_text(patched, encoding="utf-8")
 
 
 def patch_js_translate_expanded_goban_context(gopanda_js_path: Path) -> None:
@@ -576,14 +648,19 @@ def patch_js_translate_expanded_goban_context(gopanda_js_path: Path) -> None:
         raise ConfigurationError(f"Expected JS file was not found: {gopanda_js_path}")
 
     js_text = gopanda_js_path.read_text(encoding="utf-8")
-    if GOPANDA_Q0_CONTEXT_PATCHED_SNIPPET in js_text:
+    if GOPANDA_Q0_CONTEXT_PATCHED_SNIPPET in js_text or WIN_GOPANDA_Q0_CONTEXT_PATCHED_SNIPPET in js_text:
         return
 
-    patched = js_text.replace(GOPANDA_Q0_CONTEXT_SNIPPET, GOPANDA_Q0_CONTEXT_PATCHED_SNIPPET, 1)
-    if patched == js_text:
-        raise ConfigurationError(f"Could not find q0 goban context function in {gopanda_js_path}")
+    for stock_snippet, patched_snippet in (
+        (GOPANDA_Q0_CONTEXT_SNIPPET, GOPANDA_Q0_CONTEXT_PATCHED_SNIPPET),
+        (WIN_GOPANDA_Q0_CONTEXT_SNIPPET, WIN_GOPANDA_Q0_CONTEXT_PATCHED_SNIPPET),
+    ):
+        patched = js_text.replace(stock_snippet, patched_snippet, 1)
+        if patched != js_text:
+            gopanda_js_path.write_text(patched, encoding="utf-8")
+            return
 
-    gopanda_js_path.write_text(patched, encoding="utf-8")
+    raise ConfigurationError(f"Could not find supported goban context function in {gopanda_js_path}")
 
 
 def patch_grid_color_override(site_css_path: Path, grid_filter) -> None:

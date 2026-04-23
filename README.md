@@ -89,6 +89,10 @@ On macOS, the installed Pandanet bundle lives at:
 
 `/Applications/GoPanda2.app/Contents/Resources/app.asar`
 
+On Windows, the typical installed Pandanet archive lives at:
+
+`C:\Users\<username>\AppData\Local\Programs\GoPanda2\resources\app.asar`
+
 To open that app directory in Finder, open `/Applications`, right-click `GoPanda2.app`, and choose `Show Package Contents`.
 
 For repeatable theming on macOS, keep the clean upstream archive alongside it as:
@@ -146,7 +150,11 @@ uv run pandanet-tweaker inspect-theme ~/Downloads/Upsided-Sabaki-Themes-main/pac
 Theme inputs can be a Sabaki theme `.asar` pack, a directory, or a `.zip`. The recommended input is a pack such as
 `~/Downloads/Upsided-Sabaki-Themes-main/packs/baduktv-grunge.asar`.
 
-When `--asar` is omitted, the tool looks for `/Applications/GoPanda2.app/Contents/Resources/original-app.asar` first and falls back to `app.asar`. On Linux, pass `--asar` explicitly to the `app.asar` inside the extracted AppImage tree.
+When `--asar` is omitted, the tool looks for the platform install `original-app.asar` first and falls back to `app.asar`.
+
+- macOS default lookup: `/Applications/GoPanda2.app/Contents/Resources/original-app.asar`, then `app.asar`
+- Windows default lookup: `C:\Users\<username>\AppData\Local\Programs\GoPanda2\resources\original-app.asar`, then `app.asar`
+- Linux: pass `--asar` explicitly to the `app.asar` inside the extracted AppImage tree
 
 If you want to skip extracting the whole archive to the filesystem first, enable direct ASAR rebuild:
 
@@ -214,7 +222,34 @@ The second step requires `appimagetool` on the Linux machine. This repository do
 
 ### Windows
 
-Windows install steps are not documented yet. Add the verified Pandanet install path and `app.asar` replacement flow here once tested against a current Windows client build.
+The typical Pandanet install path on Windows is:
+
+`C:\Users\<username>\AppData\Local\Programs\GoPanda2\resources\app.asar`
+
+For repeatable theming, keep a clean upstream copy alongside it as:
+
+`C:\Users\<username>\AppData\Local\Programs\GoPanda2\resources\original-app.asar`
+
+Before using the tool for the first time on Windows:
+
+1. Quit GoPanda.
+2. Open `C:\Users\<username>\AppData\Local\Programs\GoPanda2\resources`.
+3. Rename `app.asar` to `original-app.asar`.
+4. Keep `original-app.asar` in that folder.
+
+Build a patched archive:
+
+```powershell
+uv run pandanet-tweaker replace C:\Users\<username>\Downloads\Upsided-Sabaki-Themes-main\packs\baduktv-grunge.asar
+```
+
+Because the default lookup now includes the Windows install path, `--asar` is usually not needed when `original-app.asar` is already in `resources`.
+
+After generating the patched archive, replace the installed archive in:
+
+`C:\Users\<username>\AppData\Local\Programs\GoPanda2\resources\app.asar`
+
+Keep `original-app.asar` in the same folder so future runs always rebuild from the clean stock client.
 
 ## Repository Layout
 

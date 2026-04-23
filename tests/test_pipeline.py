@@ -63,23 +63,16 @@ class ReplacementPlanTests(unittest.TestCase):
         )
 
     def test_resolve_source_asar_prefers_original_archive(self) -> None:
-        original_default = pandanet.DEFAULT_ORIGINAL_ASAR_PATH
-        app_default = pandanet.DEFAULT_ASAR_PATH
-        try:
-            with TemporaryDirectory() as temp_dir:
-                root = Path(temp_dir)
-                original = root / "original-app.asar"
-                app = root / "app.asar"
-                original.write_bytes(b"original")
-                app.write_bytes(b"patched")
-                pandanet.DEFAULT_ORIGINAL_ASAR_PATH = original
-                pandanet.DEFAULT_ASAR_PATH = app
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            original = root / "original-app.asar"
+            app = root / "app.asar"
+            original.write_bytes(b"original")
+            app.write_bytes(b"patched")
 
+            with patch("pandanet_tweaker.targets.pandanet.default_asar_dir", return_value=root):
                 self.assertEqual(pandanet.resolve_source_asar_path(), original)
                 self.assertEqual(pandanet.resolve_source_asar_path(app), app)
-        finally:
-            pandanet.DEFAULT_ORIGINAL_ASAR_PATH = original_default
-            pandanet.DEFAULT_ASAR_PATH = app_default
 
     def test_replace_uses_explicit_assets_in_dry_run(self) -> None:
         with TemporaryDirectory() as temp_dir:
@@ -593,6 +586,22 @@ class ReplacementPlanTests(unittest.TestCase):
         self.assertIn("function V0(a,b){return W0(a)}", js_text)
         self.assertEqual(js_text.count("function V0(a,b){return W0(a)}"), 1)
 
+    def test_patch_js_force_full_board_redraw_replaces_windows_incremental_redraw(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            js_path = Path(temp_dir) / "gopanda.js"
+            js_path.write_text(
+                "function S0(a,c){}function T0(a){}"
+                'function V0(a,b,c){if(D.Ma(c,dE))return null;var d=mB.fa(a);d=iX(d,c)[3];b=null==b||null==d||D.Ma(b,d)?b:qs;if(Hh(d,b)){a:{var e=new O(null,1,5,P,[c],null);d=J(a);d=t(d,mB);e=x(e);for(var f=null,g=0,k=0;;)if(k<g){var n=f.G(null,k),r=b;iX(d,n)[3]=r;k+=1}else if(e=x(e))kg(e)?(f=De(e),e=Ee(e),n=f,g=E(f),f=n):(n=A(e),f=b,iX(d,n)[3]=f,e=B(e),f=null,g=0),k=0;else break a}return S0(a,c)}return null}',
+                encoding="utf-8",
+            )
+
+            patch_js_force_full_board_redraw(js_path)
+            patch_js_force_full_board_redraw(js_path)
+            js_text = js_path.read_text(encoding="utf-8")
+
+        self.assertIn("return T0(a)}return null}", js_text)
+        self.assertEqual(js_text.count("return T0(a)}return null}"), 1)
+
     def test_patch_js_expand_goban_canvas_replaces_inset_layout(self) -> None:
         with TemporaryDirectory() as temp_dir:
             js_path = Path(temp_dir) / "gopanda.js"
@@ -629,11 +638,46 @@ class ReplacementPlanTests(unittest.TestCase):
         self.assertIn('J4(a,"goban-canvas",c)', js_text)
         self.assertIn('new l(null,2,[Ky,0,Qz,0],null)', js_text)
 
+    def test_patch_js_expand_goban_canvas_replaces_windows_inset_layout(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            js_path = Path(temp_dir) / "gopanda.js"
+            js_path.write_text(
+                'function H4(a,b){var c=J(b);b=t(c,mD);c=t(c,Dz);return new Rf(null,G4(a,"grid-canvas",c),new Rf(null,G4(a,"shadow-canvas",b),new Rf(null,G4(a,"goban-canvas",b),null,1,null),2,null),3,null)}'
+                'function K4(a,b){aU(function(){var n=W(F(["goban-canvas",a]));return Z.fa?Z.fa(n):Z.call(null,n)}(),new l(null,2,[Ly,qu.fa(b),Rz,qu.fa(b)],null),F(["px"]));'
+                'aU(function(){var n=W(F(["shadow-canvas",a]));return Z.fa?Z.fa(n):Z.call(null,n)}(),new l(null,2,[Ly,XC.fa(b),Rz,XC.fa(b)],null),F(["px"]));}',
+                encoding="utf-8",
+            )
+
+            patch_js_expand_goban_canvas(js_path)
+            patch_js_expand_goban_canvas(js_path)
+            js_text = js_path.read_text(encoding="utf-8")
+
+        self.assertIn('G4(a,"goban-canvas",c)', js_text)
+        self.assertEqual(js_text.count('G4(a,"goban-canvas",c)'), 1)
+        self.assertIn('new l(null,2,[Ly,0,Rz,0],null)', js_text)
+
     def test_patch_js_translate_expanded_goban_context_wraps_q0_goban_context(self) -> None:
         with TemporaryDirectory() as temp_dir:
             js_path = Path(temp_dir) / "gopanda.js"
             js_path.write_text(
                 'function q0(a,b,c,d){var e=function(){var k=W(F(["goban-canvas",a]));return Z.j?Z.j(k):Z.call(null,k)}(),f=function(){var k=W(F(["grid-canvas",a]));return Z.j?Z.j(k):Z.call(null,k)}(),g=function(){var k=W(F(["shadow-canvas",a]));return Z.j?Z.j(k):Z.call(null,k)}();return jk([Xr,jx,Qia,yca,QA,R,Qx,voa,Uy,rH],[f.getContext("2d"),c,g,e,g.getContext("2d"),a,d,f,e.getContext("2d"),b])}',
+                encoding="utf-8",
+            )
+
+            patch_js_translate_expanded_goban_context(js_path)
+            patch_js_translate_expanded_goban_context(js_path)
+            js_text = js_path.read_text(encoding="utf-8")
+
+        self.assertIn(
+            'window.__pandanetTweakerInstallGobanContext?window.__pandanetTweakerInstallGobanContext(e.getContext("2d"),d):e.getContext("2d")',
+            js_text,
+        )
+
+    def test_patch_js_translate_expanded_goban_context_wraps_windows_n0_goban_context(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            js_path = Path(temp_dir) / "gopanda.js"
+            js_path.write_text(
+                'function n0(a,b,c,d){var e=function(){var k=W(F(["goban-canvas",a]));return Z.fa?Z.fa(k):Z.call(null,k)}(),f=function(){var k=W(F(["grid-canvas",a]));return Z.fa?Z.fa(k):Z.call(null,k)}(),g=function(){var k=W(F(["shadow-canvas",a]));return Z.fa?Z.fa(k):Z.call(null,k)}();return ik([Zr,lx,Nia,vca,RA,R,Sx,poa,Vy,sH],[f.getContext("2d"),c,g,e,g.getContext("2d"),a,d,f,e.getContext("2d"),b])}',
                 encoding="utf-8",
             )
 
