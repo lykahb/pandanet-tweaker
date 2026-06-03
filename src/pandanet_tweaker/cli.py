@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import argparse
+import glob
+import os
 from pathlib import Path
 import sys
 
-from pandanet_tweaker.errors import PandanetTweakerError
+from pandanet_tweaker.errors import ConfigurationError, PandanetTweakerError
 from pandanet_tweaker.models import BackgroundMode, ReplaceRequest, ThemeInputSpec
 from pandanet_tweaker.pipeline import inspect_theme, replace_theme
 from pandanet_tweaker.targets.pandanet import infer_install_target_asar_path, resolve_source_asar_path
@@ -71,9 +73,33 @@ def build_parser() -> argparse.ArgumentParser:
         help="Override the black stone asset. The source file is copied into the patched ASAR as-is.",
     )
     replace_parser.add_argument(
+        "--black-stone-variant",
+        dest="black_stone_variants",
+        type=Path,
+        action="append",
+        nargs="+",
+        default=[],
+        help=(
+            "Add black stone variants for randomized board rendering. Accepts one or more "
+            "paths or glob patterns, and may be repeated."
+        ),
+    )
+    replace_parser.add_argument(
         "--white-stone",
         type=Path,
         help="Override the white stone asset. The source file is copied into the patched ASAR as-is.",
+    )
+    replace_parser.add_argument(
+        "--white-stone-variant",
+        dest="white_stone_variants",
+        type=Path,
+        action="append",
+        nargs="+",
+        default=[],
+        help=(
+            "Add white stone variants for randomized board rendering. Accepts one or more "
+            "paths or glob patterns, and may be repeated."
+        ),
     )
     replace_parser.add_argument(
         "--grid-rgba",
@@ -145,6 +171,8 @@ def main(argv: list[str] | None = None) -> int:
                     board_background_path=args.board_background,
                     black_stone_path=args.black_stone,
                     white_stone_path=args.white_stone,
+                    black_stone_variant_paths=_expand_variant_paths(args.black_stone_variants),
+                    white_stone_variant_paths=_expand_variant_paths(args.white_stone_variants),
                 ),
                 asar_path=asar_path,
                 output_path=args.output,
@@ -166,6 +194,21 @@ def main(argv: list[str] | None = None) -> int:
     except PandanetTweakerError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
+
+
+def _expand_variant_paths(path_groups: list[list[Path]]) -> tuple[Path, ...]:
+    paths: list[Path] = []
+    for group in path_groups:
+        for path in group:
+            pattern = os.path.expanduser(str(path))
+            if glob.has_magic(pattern):
+                matches = sorted(Path(match) for match in glob.glob(pattern))
+                if not matches:
+                    raise ConfigurationError(f"Stone variant glob did not match any files: {path}")
+                paths.extend(matches)
+            else:
+                paths.append(path)
+    return tuple(paths)
 
 
 def _print_theme_summary(theme) -> None:

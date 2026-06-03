@@ -54,6 +54,8 @@ class ReplacementPlanTests(unittest.TestCase):
         board_background_path: Path | None = None,
         black_stone_path: Path | None = None,
         white_stone_path: Path | None = None,
+        black_stone_variant_paths: tuple[Path, ...] = (),
+        white_stone_variant_paths: tuple[Path, ...] = (),
         theme_format: str = "auto",
     ) -> ThemeInputSpec:
         return ThemeInputSpec(
@@ -62,6 +64,8 @@ class ReplacementPlanTests(unittest.TestCase):
             board_background_path=board_background_path,
             black_stone_path=black_stone_path,
             white_stone_path=white_stone_path,
+            black_stone_variant_paths=black_stone_variant_paths,
+            white_stone_variant_paths=white_stone_variant_paths,
         )
 
     def test_resolve_source_asar_prefers_original_archive(self) -> None:
@@ -1011,6 +1015,82 @@ class ReplacementPlanTests(unittest.TestCase):
         self.assertEqual(
             [asset.filename for asset in theme.stone_variants[AssetRole.STONE_WHITE]],
             ["stone-white-variant-1.png"],
+        )
+
+    def test_load_input_theme_normalizes_explicit_stone_variants(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            board = root / "board.jpg"
+            black = root / "black.png"
+            white = root / "white.png"
+            black_variant_1 = root / "black-1.png"
+            black_variant_2 = root / "black-2.png"
+            white_variant = root / "white-1.png"
+            board.write_bytes(JPEG_1X1)
+            black.write_bytes(PNG_1X1)
+            white.write_bytes(PNG_1X1)
+            black_variant_1.write_bytes(PNG_1X1)
+            black_variant_2.write_bytes(PNG_1X1)
+            white_variant.write_bytes(PNG_1X1)
+
+            theme = load_input_theme(
+                self._make_input_spec(
+                    board_background_path=board,
+                    black_stone_path=black,
+                    white_stone_path=white,
+                    black_stone_variant_paths=(black_variant_1, black_variant_2),
+                    white_stone_variant_paths=(white_variant,),
+                )
+            )
+
+        self.assertEqual(
+            [asset.filename for asset in theme.stone_variants[AssetRole.STONE_BLACK]],
+            ["stone-black-variant-1.png", "stone-black-variant-2.png"],
+        )
+        self.assertEqual(
+            [asset.filename for asset in theme.stone_variants[AssetRole.STONE_WHITE]],
+            ["stone-white-variant-1.png"],
+        )
+
+    def test_replace_dry_run_with_explicit_stone_variants_injects_runtime(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            board = root / "board.jpg"
+            black = root / "black.png"
+            white = root / "white.png"
+            black_variant = root / "black-variant.png"
+            white_variant = root / "white-variant.png"
+            board.write_bytes(JPEG_1X1)
+            black.write_bytes(PNG_1X1)
+            white.write_bytes(PNG_1X1)
+            black_variant.write_bytes(PNG_1X1)
+            white_variant.write_bytes(PNG_1X1)
+
+            plan = replace_theme(
+                ReplaceRequest(
+                    input_spec=self._make_input_spec(
+                        board_background_path=board,
+                        black_stone_path=black,
+                        white_stone_path=white,
+                        black_stone_variant_paths=(black_variant,),
+                        white_stone_variant_paths=(white_variant,),
+                    ),
+                    asar_path=root / "app.asar",
+                    output_path=root / "out.asar",
+                    dry_run=True,
+                )
+            )
+
+        self.assertIn(
+            "Inject app/js/pandanet-tweaker.js and patch app/index.html to apply stone rendering overrides at runtime.",
+            plan.post_actions,
+        )
+        self.assertEqual(
+            build_stone_variant_reference_map(plan.theme),
+            {
+                AssetRole.STONE_BLACK: ("img/custom/stone-black-variant-1.png",),
+                AssetRole.STONE_WHITE: ("img/custom/stone-white-variant-1.png",),
+            },
         )
 
     def test_build_stone_variant_reference_map_uses_custom_paths(self) -> None:

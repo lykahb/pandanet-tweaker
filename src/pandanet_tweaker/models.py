@@ -52,6 +52,8 @@ class ThemeInputSpec:
     board_background_path: Path | None = None
     black_stone_path: Path | None = None
     white_stone_path: Path | None = None
+    black_stone_variant_paths: tuple[Path, ...] = ()
+    white_stone_variant_paths: tuple[Path, ...] = ()
 
     @property
     def explicit_asset_paths(self) -> tuple[Path, ...]:
@@ -63,6 +65,8 @@ class ThemeInputSpec:
         ):
             if path is not None:
                 paths.append(path)
+        paths.extend(self.black_stone_variant_paths)
+        paths.extend(self.white_stone_variant_paths)
         return tuple(paths)
 
     @property

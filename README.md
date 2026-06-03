@@ -116,6 +116,19 @@ uv run pandanet-tweaker replace \
   --white-stone /path/to/white.svg
 ```
 
+Use plain image files with multiple randomized stone variants:
+
+```bash
+uv run pandanet-tweaker replace \
+  --board-background /path/to/board.svg \
+  --black-stone /path/to/black-main.svg \
+  --black-stone-variant "/path/to/black-*.svg" \
+  --white-stone /path/to/white-main.svg \
+  --white-stone-variant "/path/to/white-*.svg"
+```
+
+The primary `--black-stone` and `--white-stone` files are still required. Variant flags add extra images that the patched client chooses from when drawing board stones. You can pass a quoted glob, an unquoted shell-expanded glob, multiple files after one flag, or repeat the same flag.
+
 Use a Sabaki theme, but override one asset:
 
 ```bash

@@ -8,6 +8,7 @@ from pandanet_tweaker.models import AssetRole, ImportedTheme, ThemeAsset, ThemeI
 
 def build_theme_from_input_spec(input_spec: ThemeInputSpec) -> ImportedTheme:
     assets: list[ThemeAsset] = []
+    stone_variants: dict[AssetRole, tuple[ThemeAsset, ...]] = {}
 
     if input_spec.board_background_path is not None:
         assets.append(_load_asset(AssetRole.BOARD, input_spec.board_background_path))
@@ -15,8 +16,16 @@ def build_theme_from_input_spec(input_spec: ThemeInputSpec) -> ImportedTheme:
         assets.append(_load_asset(AssetRole.STONE_BLACK, input_spec.black_stone_path))
     if input_spec.white_stone_path is not None:
         assets.append(_load_asset(AssetRole.STONE_WHITE, input_spec.white_stone_path))
+    if input_spec.black_stone_variant_paths:
+        stone_variants[AssetRole.STONE_BLACK] = tuple(
+            _load_asset(AssetRole.STONE_BLACK, path) for path in input_spec.black_stone_variant_paths
+        )
+    if input_spec.white_stone_variant_paths:
+        stone_variants[AssetRole.STONE_WHITE] = tuple(
+            _load_asset(AssetRole.STONE_WHITE, path) for path in input_spec.white_stone_variant_paths
+        )
 
-    if not assets:
+    if not assets and not stone_variants:
         raise ThemeImportError(
             "No input assets were provided. Pass a theme, or provide --board-background, "
             "--black-stone, and --white-stone inputs."
@@ -32,7 +41,7 @@ def build_theme_from_input_spec(input_spec: ThemeInputSpec) -> ImportedTheme:
         version=None,
         assets=tuple(assets),
         stone_transforms={},
-        stone_variants={},
+        stone_variants=stone_variants,
         metadata={},
     )
 
