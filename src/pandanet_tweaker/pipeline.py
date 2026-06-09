@@ -47,6 +47,10 @@ GRID_OVERRIDE_BLOCK_PATTERN = re.compile(
     r"\n/\* pandanet-tweaker grid override \*/\n\.goban > \.grid-canvas \{\n.*?\n\}\n?",
     re.DOTALL,
 )
+GRID_VISIBILITY_OVERRIDE_BLOCK_PATTERN = re.compile(
+    r"\n/\* pandanet-tweaker baked-grid override \*/\n\.goban > \.grid-canvas \{\n.*?\n\}\n?",
+    re.DOTALL,
+)
 SHADOW_OVERRIDE_BLOCK_PATTERN = re.compile(
     r"\n/\* pandanet-tweaker shadow override \*/\n\.goban canvas\.shadow-canvas \{\n.*?\n\}\n?",
     re.DOTALL,
@@ -202,6 +206,13 @@ def build_replacement_plan(
     if background_mode is not None:
         post_actions.append(f"Patch {PANDANET_SITE_CSS_PATH} to set board background mode to '{background_mode.value}'.")
     post_actions.append(f"Patch {PANDANET_SITE_CSS_PATH} and {PANDANET_GOPANDA_JS_PATH} to point at custom board and stone assets.")
+    if baked_grid_background_js_ref(theme) is not None:
+        post_actions.append(
+            f"Patch {PANDANET_SITE_CSS_PATH} to hide {PANDANET_GOBAN_GRID_SELECTOR} because the board background includes the grid."
+        )
+        post_actions.append(
+            f"Patch {PANDANET_GOPANDA_JS_PATH} to switch baked-grid board backgrounds when GoPanda coordinates are toggled."
+        )
     if disable_default_shadows:
         post_actions.append(
             f"Patch {PANDANET_SITE_CSS_PATH} to hide {PANDANET_GOBAN_SHADOW_SELECTOR}."
@@ -239,6 +250,8 @@ def build_replacement_plan(
 
 
 def replace_theme(request: ReplaceRequest) -> ReplacementPlan:
+    _validate_background_inputs(request)
+    background_mode = _effective_background_mode(request)
     theme = load_input_theme(request.input_spec)
     grid_filter = None
     if not 0.1 <= request.stone_scale <= 5:
@@ -253,7 +266,7 @@ def replace_theme(request: ReplaceRequest) -> ReplacementPlan:
 
     plan = build_replacement_plan(
         theme,
-        background_mode=request.background_mode,
+        background_mode=background_mode,
         grid_rgba=request.grid_rgba,
         stone_scale=request.stone_scale,
         fuzzy_stone_placement=request.fuzzy_stone_placement,
@@ -279,7 +292,7 @@ def replace_theme(request: ReplaceRequest) -> ReplacementPlan:
     _apply_replacement_plan_direct(
         asar_path,
         plan,
-        background_mode=request.background_mode,
+        background_mode=background_mode,
         grid_filter=grid_filter,
         stone_scale=request.stone_scale,
         fuzzy_stone_placement=request.fuzzy_stone_placement,
@@ -288,6 +301,36 @@ def replace_theme(request: ReplaceRequest) -> ReplacementPlan:
     )
 
     return plan
+
+
+def _validate_background_inputs(request: ReplaceRequest) -> None:
+    input_spec = request.input_spec
+    has_baked_grid = input_spec.has_baked_grid_background
+
+    if input_spec.board_background_path is not None and has_baked_grid:
+        raise ConfigurationError(
+            "Use either --board-background or --board-background-with-grid, not both."
+        )
+    if bool(input_spec.board_background_with_grid_path) != bool(
+        input_spec.board_background_with_grid_and_coordinates_path
+    ):
+        raise ConfigurationError(
+            "--board-background-with-grid and --board-background-with-grid-and-coordinates must be provided together."
+        )
+    if has_baked_grid and request.background_mode == BackgroundMode.REPEAT:
+        raise ConfigurationError(
+            "Baked-grid board backgrounds require --board-background-mode scale."
+        )
+    if has_baked_grid and request.grid_rgba is not None:
+        raise ConfigurationError(
+            "--grid-rgba cannot be used with baked-grid board backgrounds because GoPanda's grid canvas is hidden."
+        )
+
+
+def _effective_background_mode(request: ReplaceRequest) -> BackgroundMode | None:
+    if request.input_spec.has_baked_grid_background:
+        return BackgroundMode.SCALE
+    return request.background_mode
 
 
 def load_input_theme(input_spec: ThemeInputSpec) -> ImportedTheme:
@@ -330,6 +373,7 @@ def _apply_replacement_plan_direct(
     output_path: Path,
 ) -> None:
     asset_refs = build_asset_reference_map(plan.theme)
+    baked_grid_background_ref = baked_grid_background_js_ref(plan.theme)
     stone_variant_refs = build_stone_variant_reference_map(plan.theme)
     effective_stone_transforms = build_effective_stone_transforms(plan.theme.stone_transforms, stone_scale)
     needs_runtime = bool(effective_stone_transforms or stone_variant_refs or fuzzy_stone_placement > 0)
@@ -342,6 +386,10 @@ def _apply_replacement_plan_direct(
 
     for variant_assets in plan.theme.stone_variants.values():
         for asset in variant_assets:
+            replacements[target_path_for_asset(asset)] = asset.data
+
+    for asset in plan.theme.assets:
+        if asset.role == AssetRole.BOARD_WITH_GRID_AND_COORDINATES:
             replacements[target_path_for_asset(asset)] = asset.data
 
     with TemporaryDirectory(prefix="pandanet-asar-direct-") as temp_dir:
@@ -361,6 +409,13 @@ def _apply_replacement_plan_direct(
             site_css_path,
             disable_default_shadows=disable_default_shadows,
         )
+        if baked_grid_background_ref is not None:
+            patch_grid_canvas_visibility_override(site_css_path, hide_grid_canvas=True)
+            patch_js_baked_grid_background_switch(
+                gopanda_js_path,
+                asset_refs.js_refs[AssetRole.BOARD],
+                baked_grid_background_ref,
+            )
         patch_css_stone_transforms(site_css_path, effective_stone_transforms)
         if needs_runtime:
             runtime_js_path = temp_root / PANDANET_THEME_RUNTIME_JS_PATH
@@ -440,6 +495,11 @@ def build_stone_variant_reference_map(theme: ImportedTheme) -> dict[AssetRole, t
         for role, assets in theme.stone_variants.items()
         if assets
     }
+
+
+def baked_grid_background_js_ref(theme: ImportedTheme) -> str | None:
+    asset = theme.first_asset_for_role(AssetRole.BOARD_WITH_GRID_AND_COORDINATES)
+    return js_ref_for_asset(asset) if asset is not None else None
 
 
 def build_asset_reference_map(theme: ImportedTheme) -> AssetReferenceMap:
@@ -741,6 +801,24 @@ def patch_grid_color_override(site_css_path: Path, grid_filter) -> None:
     site_css_path.write_text(css_text.rstrip() + override_block, encoding="utf-8")
 
 
+def patch_grid_canvas_visibility_override(site_css_path: Path, *, hide_grid_canvas: bool) -> None:
+    if not site_css_path.is_file():
+        raise ConfigurationError(f"Expected CSS file was not found: {site_css_path}")
+
+    css_text = site_css_path.read_text(encoding="utf-8")
+    css_text = GRID_VISIBILITY_OVERRIDE_BLOCK_PATTERN.sub("\n", css_text)
+    if hide_grid_canvas:
+        override_block = (
+            "\n/* pandanet-tweaker baked-grid override */\n"
+            f"{PANDANET_GOBAN_GRID_SELECTOR} {{\n"
+            "  display: none;\n"
+            "}\n"
+        )
+        css_text = css_text.rstrip() + override_block
+
+    site_css_path.write_text(css_text, encoding="utf-8")
+
+
 def patch_shadow_canvas_override(site_css_path: Path, *, disable_default_shadows: bool) -> None:
     if not site_css_path.is_file():
         raise ConfigurationError(f"Expected CSS file was not found: {site_css_path}")
@@ -757,6 +835,47 @@ def patch_shadow_canvas_override(site_css_path: Path, *, disable_default_shadows
         css_text = css_text.rstrip() + override_block
 
     site_css_path.write_text(css_text, encoding="utf-8")
+
+
+def patch_js_baked_grid_background_switch(
+    gopanda_js_path: Path,
+    board_without_coordinates_js_ref: str,
+    board_with_coordinates_js_ref: str,
+) -> None:
+    if not gopanda_js_path.is_file():
+        raise ConfigurationError(f"Expected JS file was not found: {gopanda_js_path}")
+
+    js_text = gopanda_js_path.read_text(encoding="utf-8")
+    no_coordinates_url = _js_string_literal(f'url("{board_without_coordinates_js_ref}")')
+    coordinates_url = _js_string_literal(f'url("{board_with_coordinates_js_ref}")')
+
+    replacements = (
+        (
+            "m(q(b))&&y0(e)",
+            (
+                f"m(q(b))?(Z(W(F([\"goban\",a]))).style.backgroundImage={coordinates_url},y0(e)):"
+                f"Z(W(F([\"goban\",a]))).style.backgroundImage={no_coordinates_url}"
+            ),
+        ),
+        (
+            "m(hu.j(c))&&y0(b)",
+            (
+                f"m(hu.j(c))?(Z(W(F([\"goban\",a]))).style.backgroundImage={coordinates_url},y0(b)):"
+                f"Z(W(F([\"goban\",a]))).style.backgroundImage={no_coordinates_url}"
+            ),
+        ),
+    )
+
+    replaced = 0
+    for stock_snippet, patched_snippet in replacements:
+        if stock_snippet in js_text:
+            js_text = js_text.replace(stock_snippet, patched_snippet)
+            replaced += 1
+
+    if replaced == 0:
+        raise ConfigurationError(f"Could not find supported coordinate drawing block in {gopanda_js_path}")
+
+    gopanda_js_path.write_text(js_text, encoding="utf-8")
 
 
 def _patch_css_block(css_text: str, selector: str, declarations: dict[str, str]) -> str:

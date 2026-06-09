@@ -12,6 +12,15 @@ def build_theme_from_input_spec(input_spec: ThemeInputSpec) -> ImportedTheme:
 
     if input_spec.board_background_path is not None:
         assets.append(_load_asset(AssetRole.BOARD, input_spec.board_background_path))
+    if input_spec.board_background_with_grid_path is not None:
+        assets.append(_load_asset(AssetRole.BOARD, input_spec.board_background_with_grid_path))
+    if input_spec.board_background_with_grid_and_coordinates_path is not None:
+        assets.append(
+            _load_asset(
+                AssetRole.BOARD_WITH_GRID_AND_COORDINATES,
+                input_spec.board_background_with_grid_and_coordinates_path,
+            )
+        )
     if input_spec.black_stone_path is not None:
         assets.append(_load_asset(AssetRole.STONE_BLACK, input_spec.black_stone_path))
     if input_spec.white_stone_path is not None:
@@ -154,6 +163,8 @@ def _normalized_filename(role: AssetRole, original_name: str) -> str:
         base = "stone-black"
     elif role == AssetRole.STONE_WHITE:
         base = "stone-white"
+    elif role == AssetRole.BOARD_WITH_GRID_AND_COORDINATES:
+        base = "board-with-grid-and-coordinates"
     else:
         base = Path(original_name).stem
 

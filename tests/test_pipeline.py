@@ -17,16 +17,19 @@ from pandanet_tweaker.models import (
 from pandanet_tweaker.pipeline import (
     build_replacement_plan,
     build_asset_reference_map,
+    baked_grid_background_js_ref,
     build_stone_variant_reference_map,
     build_runtime_stone_transform_script,
     load_input_theme,
     patch_background_mode,
     patch_css_asset_references,
     patch_grid_color_override,
+    patch_grid_canvas_visibility_override,
     patch_shadow_canvas_override,
     patch_css_stone_transforms,
     patch_index_html_for_runtime_script,
     patch_js_asset_references,
+    patch_js_baked_grid_background_switch,
     patch_js_expand_goban_canvas,
     patch_js_force_full_board_redraw,
     patch_js_force_full_board_hover_preview_redraw,
@@ -52,6 +55,8 @@ class ReplacementPlanTests(unittest.TestCase):
         *,
         theme_path: Path | None = None,
         board_background_path: Path | None = None,
+        board_background_with_grid_path: Path | None = None,
+        board_background_with_grid_and_coordinates_path: Path | None = None,
         black_stone_path: Path | None = None,
         white_stone_path: Path | None = None,
         black_stone_variant_paths: tuple[Path, ...] = (),
@@ -62,6 +67,8 @@ class ReplacementPlanTests(unittest.TestCase):
             theme_path=theme_path,
             theme_format=theme_format,
             board_background_path=board_background_path,
+            board_background_with_grid_path=board_background_with_grid_path,
+            board_background_with_grid_and_coordinates_path=board_background_with_grid_and_coordinates_path,
             black_stone_path=black_stone_path,
             white_stone_path=white_stone_path,
             black_stone_variant_paths=black_stone_variant_paths,
@@ -144,6 +151,153 @@ class ReplacementPlanTests(unittest.TestCase):
             "Patch app/css/site.css to tint .goban > .grid-canvas with #336699cc.",
             plan.post_actions,
         )
+
+    def test_replace_dry_run_with_baked_grid_background_forces_scale(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            board_grid = root / "board-grid.png"
+            board_grid_coordinates = root / "board-grid-coordinates.png"
+            black = root / "black.png"
+            white = root / "white.png"
+            board_grid.write_bytes(PNG_1X1)
+            board_grid_coordinates.write_bytes(PNG_1X1)
+            black.write_bytes(PNG_1X1)
+            white.write_bytes(PNG_1X1)
+
+            plan = replace_theme(
+                ReplaceRequest(
+                    input_spec=self._make_input_spec(
+                        board_background_with_grid_path=board_grid,
+                        board_background_with_grid_and_coordinates_path=board_grid_coordinates,
+                        black_stone_path=black,
+                        white_stone_path=white,
+                    ),
+                    asar_path=root / "app.asar",
+                    output_path=root / "out.asar",
+                    dry_run=True,
+                )
+            )
+
+        self.assertTrue(all(operation.status == "ready" for operation in plan.operations))
+        self.assertEqual(
+            baked_grid_background_js_ref(plan.theme),
+            "img/custom/board-with-grid-and-coordinates.png",
+        )
+        self.assertIn(
+            "Patch app/css/site.css to set board background mode to 'scale'.",
+            plan.post_actions,
+        )
+        self.assertIn(
+            "Patch app/css/site.css to hide .goban > .grid-canvas because the board background includes the grid.",
+            plan.post_actions,
+        )
+        self.assertIn(
+            "Patch app/js/gopanda.js to switch baked-grid board backgrounds when GoPanda coordinates are toggled.",
+            plan.post_actions,
+        )
+
+    def test_replace_rejects_baked_grid_background_without_pair(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            board_grid = root / "board-grid.png"
+            black = root / "black.png"
+            white = root / "white.png"
+            board_grid.write_bytes(PNG_1X1)
+            black.write_bytes(PNG_1X1)
+            white.write_bytes(PNG_1X1)
+
+            with self.assertRaisesRegex(ConfigurationError, "must be provided together"):
+                replace_theme(
+                    ReplaceRequest(
+                        input_spec=self._make_input_spec(
+                            board_background_with_grid_path=board_grid,
+                            black_stone_path=black,
+                            white_stone_path=white,
+                        ),
+                        asar_path=root / "app.asar",
+                        output_path=root / "out.asar",
+                        dry_run=True,
+                    )
+                )
+
+    def test_replace_rejects_reusable_and_baked_grid_backgrounds_together(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            board = root / "board.png"
+            board_grid = root / "board-grid.png"
+            board_grid_coordinates = root / "board-grid-coordinates.png"
+            black = root / "black.png"
+            white = root / "white.png"
+            for path in (board, board_grid, board_grid_coordinates, black, white):
+                path.write_bytes(PNG_1X1)
+
+            with self.assertRaisesRegex(ConfigurationError, "Use either --board-background"):
+                replace_theme(
+                    ReplaceRequest(
+                        input_spec=self._make_input_spec(
+                            board_background_path=board,
+                            board_background_with_grid_path=board_grid,
+                            board_background_with_grid_and_coordinates_path=board_grid_coordinates,
+                            black_stone_path=black,
+                            white_stone_path=white,
+                        ),
+                        asar_path=root / "app.asar",
+                        output_path=root / "out.asar",
+                        dry_run=True,
+                    )
+                )
+
+    def test_replace_rejects_repeat_mode_for_baked_grid_backgrounds(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            board_grid = root / "board-grid.png"
+            board_grid_coordinates = root / "board-grid-coordinates.png"
+            black = root / "black.png"
+            white = root / "white.png"
+            for path in (board_grid, board_grid_coordinates, black, white):
+                path.write_bytes(PNG_1X1)
+
+            with self.assertRaisesRegex(ConfigurationError, "require --board-background-mode scale"):
+                replace_theme(
+                    ReplaceRequest(
+                        input_spec=self._make_input_spec(
+                            board_background_with_grid_path=board_grid,
+                            board_background_with_grid_and_coordinates_path=board_grid_coordinates,
+                            black_stone_path=black,
+                            white_stone_path=white,
+                        ),
+                        asar_path=root / "app.asar",
+                        output_path=root / "out.asar",
+                        background_mode=BackgroundMode.REPEAT,
+                        dry_run=True,
+                    )
+                )
+
+    def test_replace_rejects_grid_rgba_for_baked_grid_backgrounds(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            board_grid = root / "board-grid.png"
+            board_grid_coordinates = root / "board-grid-coordinates.png"
+            black = root / "black.png"
+            white = root / "white.png"
+            for path in (board_grid, board_grid_coordinates, black, white):
+                path.write_bytes(PNG_1X1)
+
+            with self.assertRaisesRegex(ConfigurationError, "--grid-rgba cannot be used"):
+                replace_theme(
+                    ReplaceRequest(
+                        input_spec=self._make_input_spec(
+                            board_background_with_grid_path=board_grid,
+                            board_background_with_grid_and_coordinates_path=board_grid_coordinates,
+                            black_stone_path=black,
+                            white_stone_path=white,
+                        ),
+                        asar_path=root / "app.asar",
+                        output_path=root / "out.asar",
+                        grid_rgba="#336699cc",
+                        dry_run=True,
+                    )
+                )
 
     def test_replace_dry_run_can_leave_default_shadows_enabled(self) -> None:
         with TemporaryDirectory() as temp_dir:
@@ -408,6 +562,23 @@ class ReplacementPlanTests(unittest.TestCase):
             self.assertNotIn("/* pandanet-tweaker shadow override */", reverted_css_text)
             self.assertNotIn("display: none;", reverted_css_text)
 
+    def test_patch_grid_canvas_visibility_override_hides_grid_canvas_and_is_reversible(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            css_path = Path(temp_dir) / "site.css"
+            css_path.write_text(".goban-page .goban canvas.grid-canvas {\n  z-index: 1;\n}\n", encoding="utf-8")
+
+            patch_grid_canvas_visibility_override(css_path, hide_grid_canvas=True)
+            patch_grid_canvas_visibility_override(css_path, hide_grid_canvas=True)
+            css_text = css_path.read_text(encoding="utf-8")
+            self.assertEqual(css_text.count("/* pandanet-tweaker baked-grid override */"), 1)
+            self.assertIn(".goban > .grid-canvas {", css_text)
+            self.assertIn("display: none;", css_text)
+
+            patch_grid_canvas_visibility_override(css_path, hide_grid_canvas=False)
+            reverted_css_text = css_path.read_text(encoding="utf-8")
+            self.assertNotIn("/* pandanet-tweaker baked-grid override */", reverted_css_text)
+            self.assertNotIn("display: none;", reverted_css_text)
+
     def test_css_and_js_refs_are_patched_to_custom_assets(self) -> None:
         with TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
@@ -592,6 +763,26 @@ class ReplacementPlanTests(unittest.TestCase):
 
         self.assertIn("function V0(a,b){return W0(a)}", js_text)
         self.assertEqual(js_text.count("function V0(a,b){return W0(a)}"), 1)
+
+    def test_patch_js_baked_grid_background_switch_patches_coordinate_draw_sites(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            js_path = Path(temp_dir) / "gopanda.js"
+            js_path.write_text("function a(){m(q(b))&&y0(e);m(hu.j(c))&&y0(b)}", encoding="utf-8")
+
+            patch_js_baked_grid_background_switch(
+                js_path,
+                "img/custom/board.png",
+                "img/custom/board-with-grid-and-coordinates.png",
+            )
+            js_text = js_path.read_text(encoding="utf-8")
+
+        self.assertNotIn("m(q(b))&&y0(e)", js_text)
+        self.assertNotIn("m(hu.j(c))&&y0(b)", js_text)
+        self.assertEqual(js_text.count("style.backgroundImage"), 4)
+        self.assertIn("img/custom/board.png", js_text)
+        self.assertIn("img/custom/board-with-grid-and-coordinates.png", js_text)
+        self.assertIn("y0(e)", js_text)
+        self.assertIn("y0(b)", js_text)
 
     def test_patch_js_force_full_board_redraw_replaces_windows_incremental_redraw(self) -> None:
         with TemporaryDirectory() as temp_dir:

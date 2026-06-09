@@ -167,6 +167,30 @@ The goal is not to explain the whole client. The goal is to make future upgrades
 - Tests:
   - `test_patch_js_force_full_board_hover_preview_clear_replaces_windows_preview_clear`
 
+### `baked_grid_background_switch`
+
+- Purpose: use a board background with baked-in coordinate labels only when GoPanda's coordinate setting is enabled.
+- File: `app/js/gopanda.js`
+- Current seams:
+  - macOS/Linux coordinate draw condition: `m(q(b))&&y0(e)`
+  - macOS/Linux coordinate toggle condition: `m(hu.j(c))&&y0(b)`
+- Search anchor:
+  - `y0(`
+  - `hu.j(c)`
+  - `["goban",a]`
+- Current change:
+  - stock draws coordinate labels on `grid-canvas`
+  - patched switches `.goban.style.backgroundImage` between the no-coordinate and coordinate baked-grid board images
+  - the patched condition only calls the stock coordinate drawing helper when coordinates are enabled
+- Why this seam:
+  - Baked-grid board backgrounds hide `.goban > .grid-canvas`, so the coordinate state must still drive which board image is visible.
+  - Patching the existing coordinate conditions keeps the behavior tied to GoPanda's own coordinate setting.
+- Failure symptom:
+  - coordinate labels never appear with baked-grid board backgrounds
+  - or the board image does not update after toggling GoPanda coordinates
+- Tests:
+  - `test_patch_js_baked_grid_background_switch_patches_coordinate_draw_sites`
+
 ## Related Runtime Hooks
 
 These are not minified-source replacements, but they rely on the seams above:

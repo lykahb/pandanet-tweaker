@@ -62,6 +62,24 @@ def build_parser() -> argparse.ArgumentParser:
         help="Override the board texture used inside the goban. The source file is copied into the patched ASAR as-is.",
     )
     replace_parser.add_argument(
+        "--board-background-with-grid",
+        dest="board_background_with_grid",
+        type=Path,
+        help=(
+            "Use a full board background with the grid baked in and no coordinate labels. "
+            "Must be paired with --board-background-with-grid-and-coordinates."
+        ),
+    )
+    replace_parser.add_argument(
+        "--board-background-with-grid-and-coordinates",
+        dest="board_background_with_grid_and_coordinates",
+        type=Path,
+        help=(
+            "Use a full board background with both the grid and coordinate labels baked in. "
+            "Must be paired with --board-background-with-grid."
+        ),
+    )
+    replace_parser.add_argument(
         "--board-background-mode",
         dest="board_background_mode",
         choices=tuple(mode.value for mode in BackgroundMode),
@@ -169,6 +187,8 @@ def main(argv: list[str] | None = None) -> int:
                     theme_path=args.theme,
                     theme_format=args.format,
                     board_background_path=args.board_background,
+                    board_background_with_grid_path=args.board_background_with_grid,
+                    board_background_with_grid_and_coordinates_path=args.board_background_with_grid_and_coordinates,
                     black_stone_path=args.black_stone,
                     white_stone_path=args.white_stone,
                     black_stone_variant_paths=_expand_variant_paths(args.black_stone_variants),

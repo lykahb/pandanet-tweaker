@@ -12,6 +12,7 @@ class BackgroundMode(StrEnum):
 
 class AssetRole(StrEnum):
     BOARD = "board"
+    BOARD_WITH_GRID_AND_COORDINATES = "board-with-grid-and-coordinates"
     STONE_BLACK = "stone-black"
     STONE_WHITE = "stone-white"
     UNKNOWN = "unknown"
@@ -50,6 +51,8 @@ class ThemeInputSpec:
     theme_path: Path | None = None
     theme_format: str = "auto"
     board_background_path: Path | None = None
+    board_background_with_grid_path: Path | None = None
+    board_background_with_grid_and_coordinates_path: Path | None = None
     black_stone_path: Path | None = None
     white_stone_path: Path | None = None
     black_stone_variant_paths: tuple[Path, ...] = ()
@@ -60,6 +63,8 @@ class ThemeInputSpec:
         paths: list[Path] = []
         for path in (
             self.board_background_path,
+            self.board_background_with_grid_path,
+            self.board_background_with_grid_and_coordinates_path,
             self.black_stone_path,
             self.white_stone_path,
         ):
@@ -72,6 +77,13 @@ class ThemeInputSpec:
     @property
     def has_explicit_assets(self) -> bool:
         return bool(self.explicit_asset_paths)
+
+    @property
+    def has_baked_grid_background(self) -> bool:
+        return (
+            self.board_background_with_grid_path is not None
+            or self.board_background_with_grid_and_coordinates_path is not None
+        )
 
 
 @dataclass(frozen=True)

@@ -101,6 +101,27 @@ class CliOutputTests(unittest.TestCase):
         self.assertEqual(_expand_variant_paths(args.black_stone_variants), (Path("black-1.png"), Path("black-2.png"), Path("black-3.png")))
         self.assertEqual(_expand_variant_paths(args.white_stone_variants), (Path("white-1.png"), Path("white-2.png")))
 
+    def test_replace_parser_accepts_baked_grid_background_pair(self) -> None:
+        args = build_parser().parse_args(
+            [
+                "replace",
+                "--board-background-with-grid",
+                "board-grid.png",
+                "--board-background-with-grid-and-coordinates",
+                "board-grid-coordinates.png",
+                "--black-stone",
+                "black.png",
+                "--white-stone",
+                "white.png",
+            ]
+        )
+
+        self.assertEqual(args.board_background_with_grid, Path("board-grid.png"))
+        self.assertEqual(
+            args.board_background_with_grid_and_coordinates,
+            Path("board-grid-coordinates.png"),
+        )
+
     def test_expand_variant_paths_expands_quoted_globs_in_sorted_order(self) -> None:
         with TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

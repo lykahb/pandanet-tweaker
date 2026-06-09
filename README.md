@@ -129,6 +129,20 @@ uv run pandanet-tweaker replace \
 
 The primary `--black-stone` and `--white-stone` files are still required. Variant flags add extra images that the patched client chooses from when drawing board stones. You can pass a quoted glob, an unquoted shell-expanded glob, multiple files after one flag, or repeat the same flag.
 
+Use board images that already include the grid:
+
+```bash
+uv run pandanet-tweaker replace \
+  --board-background-with-grid /path/to/board-with-grid.png \
+  --board-background-with-grid-and-coordinates /path/to/board-with-grid-and-coordinates.png \
+  --black-stone /path/to/black.svg \
+  --white-stone /path/to/white.svg
+```
+
+`--board-background` is for a reusable board texture without the grid or coordinate labels. It can be reused whether GoPanda coordinates are enabled or disabled.
+
+If the board image already includes the grid, provide both baked-grid files: one without coordinate labels and one with coordinate labels. The tool hides GoPanda's grid canvas, switches between those two board backgrounds when GoPanda coordinates are toggled, and forces scaled board rendering. Baked-grid backgrounds cannot be combined with `--board-background`, `--board-background-mode repeat`, or `--grid-rgba`.
+
 Use a Sabaki theme, but override one asset:
 
 ```bash
